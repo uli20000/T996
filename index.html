@@ -4432,6 +4432,7 @@ const shiftSubmitBtn = document.getElementById("shiftSubmitBtn");
 const shiftSubmitMessage = document.getElementById("shiftSubmitMessage");
 const shiftSuccessData = document.getElementById("shiftSuccessData");
 const shiftHomeTitle = document.getElementById("pageTitle").textContent;
+const T996_ACTIVE_AREA_CODES = ["A","B","C","D","E","G","H","I"];
 let verifiedShiftEmployee = null;
 let shiftVerifySerial = 0;
 let shiftLookupSerial = 0;
@@ -4495,6 +4496,7 @@ async function verifyShiftEmployee(){
     if(serial!==shiftVerifySerial)return false;if(r.error)throw r.error;
     if(!r.data){shiftEmployeeStatus.textContent="歡迎加入台中外送中心，目前查無名單，請找店長確認！";shiftEmployeeStatus.className="shift-state bad";return false;}
     if(!r.data.area_code){shiftEmployeeStatus.textContent="已在職名單中，但尚未設定區域；請找店長確認後再填寫。";shiftEmployeeStatus.className="shift-state bad";return false;}
+    if(!T996_ACTIVE_AREA_CODES.includes(r.data.area_code)){shiftEmployeeStatus.textContent="員工區域未列入台中目前分區，請管理員調整區域後再填寫。";shiftEmployeeStatus.className="shift-state bad";return false;}
     verifiedShiftEmployee=r.data;shiftEmployeeStatus.textContent=`✅ 已確認在職｜${r.data.area_code} 區`;shiftEmployeeStatus.className="shift-state ok";return true;
   }catch(e){if(serial===shiftVerifySerial){shiftEmployeeStatus.textContent=`名單查詢失敗，請稍後重試或找店長確認。`;shiftEmployeeStatus.className="shift-state bad";}return false;}
 }
@@ -4575,7 +4577,7 @@ function resetShiftForm(){
 function renderShiftEmployeeSuggestions(matches,keyword){
   if(!keyword){shiftNameSuggestions.innerHTML="";shiftNameSuggestions.classList.remove("show");return;}
   if(!matches.length){shiftNameSuggestions.innerHTML='<div class="name-suggestion" style="cursor:default;color:#777">查無符合的在職姓名</div>';shiftNameSuggestions.classList.add("show");return;}
-  shiftNameSuggestions.innerHTML=matches.map(row=>`<button type="button" class="name-suggestion" data-shift-employee-id="${escapeHtml(row.id)}">${escapeHtml(row.full_name)}${row.area_code?`｜${escapeHtml(row.area_code)} 區`:"｜尚未設定區域"}</button>`).join("");
+  shiftNameSuggestions.innerHTML=matches.map(row=>`<button type="button" class="name-suggestion" data-shift-employee-id="${escapeHtml(row.id)}">${escapeHtml(row.full_name)}${row.area_code?`｜${T996_ACTIVE_AREA_CODES.includes(row.area_code)?escapeHtml(row.area_code)+" 區":"區域待調整"}`:"｜尚未設定區域"}</button>`).join("");
   shiftNameSuggestions.classList.add("show");
 }
 async function searchShiftEmployeeSuggestions(keyword,serial){
@@ -4597,9 +4599,9 @@ async function searchShiftEmployeeSuggestions(keyword,serial){
   }
 }
 function setShiftEmployeeSuggestion(row){
-  verifiedShiftEmployee=row;
-  shiftEmployeeStatus.textContent=row.area_code?`✅ 已確認在職｜${row.area_code} 區`:"已在職名單中，但尚未設定區域；請找店長確認後再填寫。";
-  shiftEmployeeStatus.className=row.area_code?"shift-state ok":"shift-state bad";
+  if(!row.area_code){verifiedShiftEmployee=null;shiftEmployeeStatus.textContent="已在職名單中，但尚未設定區域；請找店長確認後再填寫。";shiftEmployeeStatus.className="shift-state bad";return;}
+  if(!T996_ACTIVE_AREA_CODES.includes(row.area_code)){verifiedShiftEmployee=null;shiftEmployeeStatus.textContent="員工區域未列入台中目前分區，請管理員調整區域後再填寫。";shiftEmployeeStatus.className="shift-state bad";return;}
+  verifiedShiftEmployee=row;shiftEmployeeStatus.textContent=`✅ 已確認在職｜${row.area_code} 區`;shiftEmployeeStatus.className="shift-state ok";
 }
 shiftNameInput.addEventListener("input",()=>{
   const keyword=shiftNameInput.value.trim();++shiftVerifySerial;verifiedShiftEmployee=null;shiftEmployeeStatus.textContent="";shiftEmployeeStatus.className="shift-state";
