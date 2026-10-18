@@ -886,6 +886,14 @@
 /* 指休開放狀態與電池領用欄位 */
 .shift-window-open{background:#edf5ef;border:1px solid #c9ddcf;border-radius:12px;padding:10px 12px;color:#2f6c47}
 #claimBatteryNumber{width:100%;height:48px;box-sizing:border-box;padding:12px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--black);font:inherit}
+
+/* T996 V3: choose among admin-opened shift weeks; show each week's dates and weekdays. */
+.shift-open-week-picker{display:flex;flex-wrap:wrap;justify-content:center;gap:7px;margin:8px 0 12px}
+.shift-open-week-picker:empty{display:none}
+.shift-open-week-btn{min-height:38px;padding:7px 11px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--black);font:inherit;font-size:13px;font-weight:800;cursor:pointer}
+.shift-open-week-btn.active{border-color:var(--red);background:var(--red);color:#fff;box-shadow:0 3px 9px rgba(200,16,46,.14)}
+@media(max-width:500px){.shift-open-week-picker{gap:5px}.shift-open-week-btn{min-height:36px;padding:6px 8px;font-size:12px}}
+
 </style>
 </head>
 
@@ -1541,6 +1549,7 @@
         <div class="section-number">員工指休／可上班時間</div>
         <div class="shift-note"><strong>每天都要填可上班時段，或選「無法上班」。</strong><br>可新增第二時段；七天皆無法上班時，備註必填原因。</div>
         <div id="shiftWeekLabel" class="shift-week-label">查詢開放週次中…</div>
+        <div id="shiftOpenWeekPicker" class="shift-open-week-picker" role="group" aria-label="選擇已開放週次"></div>
         <div id="shiftWindowMessage" class="hint"></div>
         <label class="label" for="shiftEmployeeName" style="margin-top:20px">姓名</label>
         <div class="name-search-wrap">
@@ -1653,8 +1662,16 @@ const db =
     SUPABASE_KEY
   );
 
-const SURVEY_ROUND_YEAR = 2027;
-const CURRENT_SURVEY_ROUND = `${SURVEY_ROUND_YEAR}M${new Date().getMonth() + 1 >= 7 ? 7 : 1}`;
+function trainingTaipeiParts(date = new Date()){
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Taipei", year: "numeric", month: "numeric", day: "numeric"
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return {year:Number(values.year), month:Number(values.month), day:Number(values.day)};
+}
+function currentSurveyRound(date = new Date()){
+  return trainingTaipeiParts(date).month >= 7 ? "M7" : "M1";
+}
 
 // 台中 T996 安全月曆：與 index.html 同層的 pdf 資料夾
 const SAFETY_CALENDAR_PDFS = {
@@ -3806,20 +3823,19 @@ async function saveSurvey() {
     const behaviorScore = Object.values(surveyAnswers.behavior).reduce((sum, value) => sum + value, 0);
     const attitudeScore = Object.values(surveyAnswers.attitude).reduce((sum, value) => sum + value, 0);
     const accident = document.querySelector('input[name="accidentWithinYear"]:checked');
-    const result = await db.from("driver_survey_responses").insert({
-      respondent_name: respondentName,
-      survey_round: CURRENT_SURVEY_ROUND,
-      part1_answers: {
+    const result = await db.rpc("submit_driver_survey_response", {
+      p_respondent_name: respondentName,
+      p_part1_answers: {
         violation_points: Number(violationPointsInput.value),
         answers: surveyAnswers.behavior
       },
-      part1_total: behaviorScore,
-      part1_result: behaviorScore <= 27 ? "合格" : "不合格",
-      part2_answers: surveyAnswers.attitude,
-      part2_total: attitudeScore,
-      part2_result: attitudeScore <= 57 ? "合格" : "不合格",
-      accident_within_one_year: accident.value === "有",
-      accident_description: accident.value === "有" ? accidentDetailInput.value.trim() : null
+      p_part1_total: behaviorScore,
+      p_part1_result: behaviorScore <= 27 ? "合格" : "不合格",
+      p_part2_answers: surveyAnswers.attitude,
+      p_part2_total: attitudeScore,
+      p_part2_result: attitudeScore <= 57 ? "合格" : "不合格",
+      p_accident_within_one_year: accident.value === "有",
+      p_accident_description: accident.value === "有" ? accidentDetailInput.value.trim() : null
     });
 
     if (result.error) {
@@ -3828,7 +3844,12 @@ async function saveSurvey() {
       return;
     }
 
+    const savedAt = result.data?.submitted_at ? new Date(result.data.submitted_at) : new Date();
+    const savedRound = result.data?.survey_round || currentSurveyRound(savedAt);
+    const savedYear = trainingTaipeiParts(savedAt).year;
+    const savedPeriod = savedRound === "M7" ? `${savedYear}/07–12` : `${savedYear}/01–06`;
     document.getElementById("surveySuccessData").innerHTML = `
+      <div><strong>填寫期別：</strong>${escapeHtml(savedPeriod)}（${escapeHtml(savedRound)}）</div>
       <div><strong>填寫人：</strong>${escapeHtml(surveyRespondentNameInput.value.trim())}</div>
       <div><strong>違規記點：</strong>${Number(violationPointsInput.value)} 點</div>
       <div><strong>駕駛行為：</strong>${behaviorScore} 分，${behaviorScore <= 27 ? "合格" : "不合格"}</div>
@@ -3937,7 +3958,11 @@ function closeAllNameSuggestions(){
 
 
 function currentTrainingYear(){
-  return new Date().getFullYear();
+  return trainingTaipeiParts().year;
+}
+
+function currentTrainingMonth(){
+  return trainingTaipeiParts().month;
 }
 
 function selectedTrainingMonth(){
@@ -3968,7 +3993,7 @@ function resetDefensiveForm(){
   defensiveNameInput.value = "";
   defensiveNameSuggestions.classList.remove("show");
   defensiveNameSuggestions.innerHTML = "";
-  defensiveMonthSelect.value = String(new Date().getMonth() + 1);
+  defensiveMonthSelect.value = String(currentTrainingMonth());
   defensiveLessonPanel.style.display = "none";
   defensiveQuestions.style.display = "none";
   defensiveStatus.className = "training-message";
@@ -4094,7 +4119,7 @@ defensiveSubmitBtn.addEventListener("click", async () => {
       completed_at: isCorrect ? now : null,
       status: isCorrect ? "completed" : "incomplete"
     };
-    const result = await db.from("defensive_driving_responses").upsert(payload, {onConflict:"respondent_name,training_year,month_no"});
+    const result = await db.from("defensive_driving_responses").upsert(payload, {onConflict:"respondent_name,month_no"});
     if(result.error) throw result.error;
     if(!isCorrect){
       alert("本次答題未通過，請重新觀看影片後再回答兩題。\n目前仍未完成本月課程。");
@@ -4131,7 +4156,7 @@ document.addEventListener("click", event => {
 defensiveLoadBtn.addEventListener("click", loadDefensiveLesson);
 document.getElementById("defensiveBackBtn").addEventListener("click", showHome);
 document.getElementById("defensiveSuccessHomeBtn").addEventListener("click", showHome);
-defensiveMonthSelect.value = String(new Date().getMonth() + 1);
+defensiveMonthSelect.value = String(currentTrainingMonth());
 
 
 /* =====================================================
@@ -4447,31 +4472,94 @@ function taipeiShiftNow(){
 function shiftISO(y,m,d){return `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;}
 function shiftDateAdd(iso,days){const [y,m,d]=iso.split("-").map(Number);const dt=new Date(Date.UTC(y,m-1,d+days));return shiftISO(dt.getUTCFullYear(),dt.getUTCMonth()+1,dt.getUTCDate());}
 function shiftRangeLabel(start){return `${start} 至 ${shiftDateAdd(start,6)}`;}
-let shiftSubmissionOpen=false;
+let shiftOpenWeeks=[];
 let shiftTestModeEnabled=false;
+let shiftSelectedWeekStart=null;
+const shiftOpenWeekPicker=document.getElementById("shiftOpenWeekPicker");
+const shiftWeekdayNames=["日","一","二","三","四","五","六"];
+function shiftDateParts(iso){const [y,m,d]=iso.split("-").map(Number);return {y,m,d,weekday:new Date(Date.UTC(y,m-1,d)).getUTCDay()};}
+function shiftDateWeekday(iso){const p=shiftDateParts(iso);return `${p.m}/${p.d}（${shiftWeekdayNames[p.weekday]}）`;}
+function shiftWeekChoiceLabel(start){return `${shiftDateWeekday(start)}–${shiftDateWeekday(shiftDateAdd(start,6))}`;}
+function shiftCurrentMonday(){const p=taipeiShiftNow();const today=shiftISO(p.y,p.m,p.d);return shiftDateAdd(today,-((p.dow+6)%7));}
 function getShiftSubmissionCycle(){
-  const p=taipeiShiftNow();const today=shiftISO(p.y,p.m,p.d);const monday=shiftDateAdd(today,-((p.dow+6)%7));
-  const beforeWeekCutoff=(p.dow>=1&&p.dow<=5)||(p.dow===6&&p.minute<600);
-  const weekStart=shiftDateAdd(monday,beforeWeekCutoff?7:14);
-  return {open:shiftSubmissionOpen||shiftTestModeEnabled,weekStart,testMode:shiftTestModeEnabled};
+  const available=shiftOpenWeeks.some(row=>row.week_start===shiftSelectedWeekStart);
+  return {open:Boolean(available),weekStart:available?shiftSelectedWeekStart:null,testMode:shiftTestModeEnabled,openWeeks:shiftOpenWeeks};
 }
 async function loadShiftSubmissionSettings(){
-  const [openResult,testResult]=await Promise.all([db.rpc("shift_submission_open_enabled"),db.rpc("shift_test_mode_enabled")]);
-  if(openResult.error)throw openResult.error;if(testResult.error)throw testResult.error;
-  shiftSubmissionOpen=Boolean(openResult.data);shiftTestModeEnabled=Boolean(testResult.data);
-  return {open:shiftSubmissionOpen,testMode:shiftTestModeEnabled};
+  const [weeksResult,testResult]=await Promise.all([
+    db.from("weekly_shift_open_weeks").select("week_start").eq("is_open",true).gte("week_start",shiftCurrentMonday()).order("week_start",{ascending:true}),
+    db.rpc("shift_test_mode_enabled")
+  ]);
+  if(weeksResult.error)throw weeksResult.error;if(testResult.error)throw testResult.error;
+  shiftOpenWeeks=[...new Set((weeksResult.data||[]).map(row=>row.week_start))].map(week_start=>({week_start}));
+  shiftTestModeEnabled=Boolean(testResult.data);
+  if(!shiftSelectedWeekStart&&shiftOpenWeeks.length)shiftSelectedWeekStart=shiftOpenWeeks[0].week_start;
+  return {openWeeks:shiftOpenWeeks,testMode:shiftTestModeEnabled};
 }
+function renderShiftWeekPicker(){
+  if(!shiftOpenWeekPicker)return;
+  shiftOpenWeekPicker.innerHTML=shiftOpenWeeks.map(row=>`<button type="button" class="shift-open-week-btn ${row.week_start===shiftSelectedWeekStart?'active':''}" data-shift-open-week="${row.week_start}" aria-pressed="${row.week_start===shiftSelectedWeekStart?'true':'false'}">${shiftWeekChoiceLabel(row.week_start)}</button>`).join('');
+}
+function updateShiftDayDates(weekStart){
+  const labels=Object.keys(shiftDayLabels);
+  labels.forEach((key,index)=>{
+    const iso=shiftDateAdd(weekStart,index);const p=shiftDateParts(iso);const dayLabel=`週${shiftWeekdayNames[p.weekday]}`;
+    shiftDayLabels[key]=`${p.m}/${p.d}（${dayLabel}）`;
+    const element=shiftDaysContainer.querySelector(`[data-shift-day="${key}"] [data-shift-day-label]`);
+    if(element)element.innerHTML=`<span class="shift-day-date">${p.m}/${p.d}</span><span class="shift-day-weekday">${dayLabel}</span>`;
+    shiftDaysContainer.querySelectorAll(`[data-shift-day="${key}"] [data-shift-start]`).forEach(input=>input.setAttribute("aria-label",`${p.m}/${p.d} ${dayLabel}開始時間`));
+    shiftDaysContainer.querySelectorAll(`[data-shift-day="${key}"] [data-shift-end]`).forEach(input=>input.setAttribute("aria-label",`${p.m}/${p.d} ${dayLabel}結束時間`));
+  });
+}
+function shiftHasEnteredAvailability(){
+  return [...shiftDaysContainer.querySelectorAll("[data-shift-start],[data-shift-end]")].some(input=>input.value.trim())
+    ||[...shiftDaysContainer.querySelectorAll("[data-shift-unavailable]")].some(input=>input.checked)
+    ||Boolean(document.getElementById("shiftNotes").value.trim());
+}
+function clearShiftAvailabilityOnly(){
+  for(const dayElement of shiftDaysContainer.querySelectorAll("[data-shift-day]")){
+    dayElement.querySelector("[data-shift-unavailable]").checked=false;
+    const slots=[...dayElement.querySelectorAll("[data-shift-slot]")];for(const slot of slots.slice(1))slot.remove();
+    dayElement.querySelectorAll("[data-shift-start],[data-shift-end]").forEach(input=>input.value="");updateShiftDayControls(dayElement);
+  }
+  document.getElementById("shiftNotes").value="";
+}
+shiftOpenWeekPicker.addEventListener("click",event=>{
+  const button=event.target.closest("[data-shift-open-week]");if(!button)return;
+  const next=button.dataset.shiftOpenWeek;if(next===shiftSelectedWeekStart)return;
+  if(shiftHasEnteredAvailability()&&!confirm("切換週次會清除目前填寫的可上班時段與備註，是否繼續？"))return;
+  if(shiftHasEnteredAvailability())clearShiftAvailabilityOnly();
+  shiftSelectedWeekStart=next;shiftSubmitMessage.textContent="";updateShiftWindow();
+});
 function updateShiftWindow(){
-  const cycle=getShiftSubmissionCycle();shiftWeekLabel.textContent=`填寫週次：${shiftRangeLabel(cycle.weekStart)}`;
-  if(cycle.testMode){shiftWindowMessage.textContent="測試模式開放｜提交會標記為測試資料。";shiftWindowMessage.className="hint shift-window-test";}
-  else if(cycle.testMode){shiftWindowMessage.textContent="測試模式開放｜提交會標記為測試資料。";shiftWindowMessage.className="hint shift-window-test";}
-  else if(cycle.open){shiftWindowMessage.textContent="目前已開放｜任何時間皆可填寫，提交視為正式資料。";shiftWindowMessage.className="hint shift-window-open";}
-  else{shiftWindowMessage.textContent="目前未開放，請留意後台公告。";shiftWindowMessage.className="hint shift-window-closed";}
+  const cycle=getShiftSubmissionCycle();renderShiftWeekPicker();
+  const displayWeek=cycle.weekStart||shiftSelectedWeekStart;
+  if(displayWeek){
+    shiftWeekLabel.textContent=`填寫週次：${shiftRangeLabel(displayWeek)}`;
+    updateShiftDayDates(displayWeek);
+  }else{
+    shiftWeekLabel.textContent="目前沒有開放的指休週次";
+  }
+  if(!cycle.open){
+    shiftWindowMessage.textContent=displayWeek?"所選週次已關閉，請重新選擇目前開放的日期。":"目前沒有開放的週次，請聯絡店長。";
+    shiftWindowMessage.className="hint shift-window-closed";
+  }else if(cycle.testMode){
+    shiftWindowMessage.textContent="本週已由後台開放｜目前為測試模式，提交會標記為測試資料。";
+    shiftWindowMessage.className="hint shift-window-test";
+  }else{
+    shiftWindowMessage.textContent="本週已由後台開放｜請依顯示的日期與星期填寫。";
+    shiftWindowMessage.className="hint shift-window-open";
+  }
   shiftSubmitBtn.disabled=!cycle.open;return cycle;
 }
 async function enterShiftMode(){
-  try{await loadShiftSubmissionSettings();const cycle=getShiftSubmissionCycle();if(!cycle.open){alert("指休表目前未開放，請留意後台公告。");return;}showMode("shift");}
-  catch(e){alert(`目前無法確認指休表開放狀態：${e.message||"請稍後再試"}`);}
+  try{
+    await loadShiftSubmissionSettings();
+    if(!shiftOpenWeeks.some(row=>row.week_start===shiftSelectedWeekStart))shiftSelectedWeekStart=shiftOpenWeeks[0]?.week_start||null;
+    const cycle=updateShiftWindow();
+    if(!cycle.open){alert("目前沒有已開放的指休週次，請留意後台設定或聯絡店長。");return;}
+    showMode("shift");
+  }catch(e){alert(`目前無法確認指休表開放狀態：${e.message||"請稍後再試"}`);}
 }
 function parseAvailabilityRanges(value){
   const text=String(value||"").trim();if(!text)return [];
