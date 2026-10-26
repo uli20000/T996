@@ -1540,6 +1540,8 @@
       <section class="card">
         <div class="section-number">員工指休／可上班時間</div>
         <div class="shift-note"><strong>每天都要填可上班時段，或選「無法上班」。</strong><br>可新增第二時段；七天皆無法上班時，備註必填原因。</div>
+        <label for="shiftWeekSelect" class="shift-week-label">選擇填寫週次</label>
+        <select id="shiftWeekSelect" style="width:100%;font-size:18px;padding:12px;margin:8px 0" aria-label="選擇填寫週次"></select>
         <div id="shiftWeekLabel" class="shift-week-label">查詢開放週次中…</div>
         <div id="shiftWindowMessage" class="hint"></div>
         <label class="label" for="shiftEmployeeName" style="margin-top:20px">姓名</label>
@@ -4445,31 +4447,73 @@ function taipeiShiftNow(){
 function shiftISO(y,m,d){return `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;}
 function shiftDateAdd(iso,days){const [y,m,d]=iso.split("-").map(Number);const dt=new Date(Date.UTC(y,m-1,d+days));return shiftISO(dt.getUTCFullYear(),dt.getUTCMonth()+1,dt.getUTCDate());}
 function shiftRangeLabel(start){return `${start} 至 ${shiftDateAdd(start,6)}`;}
-let shiftSubmissionOpen=false;
 let shiftTestModeEnabled=false;
+let shiftOpenWeeks=[];
+let shiftSelectedWeek="";
+let shiftSubmitting=false;
+const shiftWeekSelect=document.getElementById("shiftWeekSelect");
+function currentShiftMonday(){
+  const p=taipeiShiftNow();
+  return shiftDateAdd(shiftISO(p.y,p.m,p.d),-((p.dow+6)%7));
+}
 function getShiftSubmissionCycle(){
-  const p=taipeiShiftNow();const today=shiftISO(p.y,p.m,p.d);const monday=shiftDateAdd(today,-((p.dow+6)%7));
-  const beforeWeekCutoff=(p.dow>=1&&p.dow<=5)||(p.dow===6&&p.minute<600);
-  const weekStart=shiftDateAdd(monday,beforeWeekCutoff?7:14);
-  return {open:shiftSubmissionOpen||shiftTestModeEnabled,weekStart,testMode:shiftTestModeEnabled};
+  return {open:shiftOpenWeeks.includes(shiftSelectedWeek)&&shiftSelectedWeek>=currentShiftMonday(),weekStart:shiftSelectedWeek,testMode:shiftTestModeEnabled};
 }
 async function loadShiftSubmissionSettings(){
-  const [openResult,testResult]=await Promise.all([db.rpc("shift_submission_open_enabled"),db.rpc("shift_test_mode_enabled")]);
-  if(openResult.error)throw openResult.error;if(testResult.error)throw testResult.error;
-  shiftSubmissionOpen=Boolean(openResult.data);shiftTestModeEnabled=Boolean(testResult.data);
-  return {open:shiftSubmissionOpen,testMode:shiftTestModeEnabled};
+  try{
+    const [weeksResult,testResult]=await Promise.all([
+      db.from("weekly_shift_open_weeks").select("week_start").eq("is_open",true).gte("week_start",currentShiftMonday()).order("week_start",{ascending:true}),
+      db.rpc("shift_test_mode_enabled")
+    ]);
+    if(weeksResult.error)throw weeksResult.error;if(testResult.error)throw testResult.error;
+    shiftOpenWeeks=[...new Set((weeksResult.data||[]).map(row=>row.week_start))].filter(week=>/^\d{4}-\d{2}-\d{2}$/.test(week)&&week>=currentShiftMonday()).sort();
+    shiftTestModeEnabled=Boolean(testResult.data);
+    // Never silently move an existing draft to another week after its week closes.
+    if(!shiftSelectedWeek&&shiftOpenWeeks.length)shiftSelectedWeek=shiftOpenWeeks[0];
+    renderShiftWeekChoices();
+    return getShiftSubmissionCycle();
+  }catch(error){
+    shiftOpenWeeks=[];renderShiftWeekChoices();updateShiftWindow();throw error;
+  }
 }
+function renderShiftWeekChoices(){
+  shiftWeekSelect.replaceChildren();
+  const choices=shiftOpenWeeks.slice();
+  if(shiftSelectedWeek&&!choices.includes(shiftSelectedWeek))choices.unshift(shiftSelectedWeek);
+  if(!choices.length){const option=document.createElement("option");option.value="";option.textContent="目前沒有開放的週次";shiftWeekSelect.appendChild(option);}
+  for(const week of choices){
+    const option=document.createElement("option");option.value=week;
+    option.textContent=shiftRangeLabel(week)+(shiftOpenWeeks.includes(week)?"":"（已關閉）");
+    option.disabled=!shiftOpenWeeks.includes(week);shiftWeekSelect.appendChild(option);
+  }
+  shiftWeekSelect.value=shiftSelectedWeek;
+  shiftWeekSelect.disabled=shiftSubmitting||!shiftOpenWeeks.length;
+}
+function shiftHasDraft(){
+  return [...shiftDaysContainer.querySelectorAll("[data-shift-start],[data-shift-end]")].some(input=>input.value!=="")
+    ||[...shiftDaysContainer.querySelectorAll("[data-shift-unavailable]")].some(input=>input.checked)
+    ||document.getElementById("shiftNotes").value.trim()!=="";
+}
+shiftWeekSelect.addEventListener("change",()=>{
+  const next=shiftWeekSelect.value;
+  if(shiftSubmitting||!shiftOpenWeeks.includes(next)){shiftWeekSelect.value=shiftSelectedWeek;return;}
+  if(next===shiftSelectedWeek)return;
+  if(shiftHasDraft()&&!confirm("切換週次會清除目前尚未送出的時段與備註，確定切換？")){
+    shiftWeekSelect.value=shiftSelectedWeek;return;
+  }
+  shiftSelectedWeek=next;resetShiftForm();updateShiftWindow();
+});
 function updateShiftWindow(){
-  const cycle=getShiftSubmissionCycle();shiftWeekLabel.textContent=`填寫週次：${shiftRangeLabel(cycle.weekStart)}`;
-  if(cycle.testMode){shiftWindowMessage.textContent="測試模式開放｜提交會標記為測試資料。";shiftWindowMessage.className="hint shift-window-test";}
+  const cycle=getShiftSubmissionCycle();
+  shiftWeekLabel.textContent=cycle.weekStart?"填寫週次："+shiftRangeLabel(cycle.weekStart):"目前沒有開放的週次";
+  if(!cycle.open){shiftWindowMessage.textContent="此週次目前未開放或已關閉，請選擇其他開放週次；已填內容仍保留。";shiftWindowMessage.className="hint shift-window-closed";}
   else if(cycle.testMode){shiftWindowMessage.textContent="測試模式開放｜提交會標記為測試資料。";shiftWindowMessage.className="hint shift-window-test";}
-  else if(cycle.open){shiftWindowMessage.textContent="目前已開放｜任何時間皆可填寫，提交視為正式資料。";shiftWindowMessage.className="hint shift-window-open";}
-  else{shiftWindowMessage.textContent="目前未開放，請留意後台公告。";shiftWindowMessage.className="hint shift-window-closed";}
-  shiftSubmitBtn.disabled=!cycle.open;return cycle;
+  else{shiftWindowMessage.textContent="目前已開放｜請確認選定週次後填寫，提交視為正式資料。";shiftWindowMessage.className="hint shift-window-open";}
+  shiftSubmitBtn.disabled=shiftSubmitting||!cycle.open;return cycle;
 }
 async function enterShiftMode(){
-  try{await loadShiftSubmissionSettings();const cycle=getShiftSubmissionCycle();if(!cycle.open){alert("指休表目前未開放，請留意後台公告。");return;}showMode("shift");}
-  catch(e){alert(`目前無法確認指休表開放狀態：${e.message||"請稍後再試"}`);}
+  try{await loadShiftSubmissionSettings();const cycle=updateShiftWindow();if(!cycle.open&&!shiftOpenWeeks.length){alert("指休表目前未開放，請留意後台公告。");return;}showMode("shift");}
+  catch(e){alert("目前無法確認指休表開放狀態："+(e.message||"請稍後再試"));}
 }
 function parseAvailabilityRanges(value){
   const text=String(value||"").trim();if(!text)return [];
@@ -4540,6 +4584,12 @@ function readShiftDayValue(dayKey){
   return {value:intervals.map(([start,end])=>`${start/60}-${end/60}`).join("/"),intervals};
 }
 async function submitShiftAvailability(){
+  if(shiftSubmitting)return;
+  shiftSubmitting=true;shiftWeekSelect.disabled=true;shiftSubmitBtn.disabled=true;
+  try{await submitSelectedShiftAvailability();}
+  finally{shiftSubmitting=false;renderShiftWeekChoices();updateShiftWindow();}
+}
+async function submitSelectedShiftAvailability(){
   try{await loadShiftSubmissionSettings();}catch(e){shiftSubmitMessage.textContent="無法確認開放狀態，請稍後再試。";return;}
   const cycle=updateShiftWindow();if(!cycle.open){shiftSubmitMessage.textContent="指休表目前已關閉，無法送出。";return;}
   if(!await verifyShiftEmployee())return;
@@ -4553,6 +4603,13 @@ async function submitShiftAvailability(){
   if(dayResults.saturday.value==="無法上班"||dayResults.sunday.value==="無法上班"){
     const ok=confirm("週六或週日選擇無法上班，可能影響排班工時；若能提供週末時段可增加排班彈性。仍要送出嗎？");if(!ok)return;
   }
+  try{
+    await loadShiftSubmissionSettings();
+    const latest=getShiftSubmissionCycle();
+    if(!latest.open||latest.weekStart!==cycle.weekStart||latest.testMode!==cycle.testMode){
+      updateShiftWindow();shiftSubmitMessage.textContent="週次開放或測試設定已變更，請確認後重新送出；填寫內容仍保留。";return;
+    }
+  }catch(e){shiftSubmitMessage.textContent="無法再次確認開放狀態，填寫內容仍保留，請稍後重試。";return;}
   const payload={employee_id:verifiedShiftEmployee.id,week_start:cycle.weekStart,...values,notes:notes||null};
   shiftSubmitBtn.disabled=true;shiftSubmitMessage.textContent="送出中…";
   try{
@@ -4622,7 +4679,7 @@ showMode=function(mode){
   baseShowModeForShift(mode);shiftPage.style.display=mode==="shift"?"block":"none";
   document.getElementById("shiftBackTop").style.display=mode==="shift"?"block":"none";
   if(mode==="shift"){
-    pageTitle.textContent=shiftHomeTitle;introTitle.textContent="員工指休表單";introText.textContent="輸入姓名確認在職後，填寫下週可上班時段。";introSection.style.display="block";introText.style.display="block";resetShiftForm();
+    pageTitle.textContent=shiftHomeTitle;introTitle.textContent="員工指休表單";introText.textContent="輸入姓名確認在職後，選擇開放週次，填寫該週可上班時段。";introSection.style.display="block";introText.style.display="block";resetShiftForm();
   }
 };
 const baseShowHomeForShift=showHome;
