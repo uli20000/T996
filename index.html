@@ -886,6 +886,43 @@
 /* 指休開放狀態與電池領用欄位 */
 .shift-window-open{background:#edf5ef;border:1px solid #c9ddcf;border-radius:12px;padding:10px 12px;color:#2f6c47}
 #claimBatteryNumber{width:100%;height:48px;box-sizing:border-box;padding:12px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--black);font:inherit}
+/* T996 V4：已開放週次選擇與日期／星期標示。 */
+.shift-open-week-picker{display:flex;flex-wrap:wrap;justify-content:center;gap:7px;margin:8px 0 12px}
+.shift-open-week-picker:empty{display:none}
+.shift-open-week-btn{min-height:38px;padding:7px 11px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--black);font:inherit;font-size:13px;font-weight:800;cursor:pointer}
+.shift-open-week-btn.active{border-color:var(--red);background:var(--red);color:#fff;box-shadow:0 3px 9px rgba(200,16,46,.14)}
+.shift-day-structured{grid-template-columns:68px minmax(0,1fr)}
+.shift-day-name{display:grid;gap:2px;align-content:start;justify-items:center;padding-top:9px;white-space:normal;text-align:center;font-size:12px;line-height:1.3}
+.shift-day-name .shift-day-date{font-weight:900;color:var(--black)}
+.shift-day-name .shift-day-weekday{font-size:11px;color:var(--gray);font-weight:700}
+.shift-day-structured.is-unavailable .shift-day-name .shift-day-date,.shift-day-structured.is-unavailable .shift-day-name .shift-day-weekday{color:var(--danger)}
+@media(max-width:500px){.shift-open-week-picker{gap:5px}.shift-open-week-btn{min-height:36px;padding:6px 8px;font-size:12px}.shift-day-structured{grid-template-columns:60px minmax(0,1fr);gap:6px}.shift-day-name{padding-top:10px;font-size:11px}.shift-day-name .shift-day-weekday{font-size:10px}}
+
+/* T996 V5：指休日格文字置中、欄位等寬，操作按鈕尺寸一致。 */
+.shift-day-structured{grid-template-columns:78px minmax(0,1fr);align-items:center;gap:10px;padding:12px 14px}
+.shift-day-name{align-content:center;justify-items:center;padding-top:0;text-align:center;font-size:13px;line-height:1.3}
+.shift-day-name .shift-day-date{font-size:14px}
+.shift-day-name .shift-day-weekday{font-size:12px}
+.shift-day-content{width:100%;justify-items:stretch;gap:8px}
+.shift-time-slots{width:100%;justify-items:center}
+.shift-time-slot,.shift-time-slot-extra{width:100%;grid-template-columns:minmax(0,160px) 16px minmax(0,160px);justify-content:center;gap:8px}
+.shift-time-input{width:100%;max-width:160px;height:46px!important;font-size:16px!important;text-align:center}
+.shift-time-separator{text-align:center;font-size:16px}
+.shift-day-actions{justify-content:center;gap:12px}
+.shift-add-slot,.shift-slot-remove,.shift-unavailable{width:132px;min-width:132px;height:40px;min-height:40px;padding:5px 8px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;font-size:13px;text-align:center}
+.shift-unavailable input[type="checkbox"]{width:18px!important;height:18px!important;flex:none}
+@media(max-width:500px){
+ .shift-day-structured{grid-template-columns:58px minmax(0,1fr);align-items:center;gap:7px;padding:10px}
+ .shift-day-name{font-size:12px}
+ .shift-day-name .shift-day-date{font-size:13px}
+ .shift-day-name .shift-day-weekday{font-size:11px}
+ .shift-time-slot,.shift-time-slot-extra{grid-template-columns:minmax(0,1fr) 14px minmax(0,1fr);gap:5px}
+ .shift-time-input{height:44px!important;font-size:15px!important}
+ .shift-day-actions{display:grid;grid-template-columns:repeat(2,minmax(0,132px));justify-content:center;gap:7px}
+ .shift-add-slot,.shift-slot-remove,.shift-unavailable{width:100%;min-width:0;height:40px;min-height:40px;padding:4px 5px;font-size:12px}
+}
+.shift-open-week-btn:focus-visible{outline:3px solid #1683df;outline-offset:3px}
+.shift-open-week-btn:disabled{cursor:default;opacity:.55}
 </style>
 </head>
 
@@ -1540,9 +1577,9 @@
       <section class="card">
         <div class="section-number">員工指休／可上班時間</div>
         <div class="shift-note"><strong>每天都要填可上班時段，或選「無法上班」。</strong><br>可新增第二時段；七天皆無法上班時，備註必填原因。</div>
-        <label for="shiftWeekSelect" class="shift-week-label">選擇填寫週次</label>
-        <select id="shiftWeekSelect" style="width:100%;font-size:18px;padding:12px;margin:8px 0" aria-label="選擇填寫週次"></select>
+        <select id="shiftWeekSelect" hidden aria-hidden="true" tabindex="-1"></select>
         <div id="shiftWeekLabel" class="shift-week-label">查詢開放週次中…</div>
+        <div id="shiftOpenWeekPicker" class="shift-open-week-picker" role="group" aria-label="選擇填寫週次"></div>
         <div id="shiftWindowMessage" class="hint"></div>
         <label class="label" for="shiftEmployeeName" style="margin-top:20px">姓名</label>
         <div class="name-search-wrap">
@@ -4452,6 +4489,43 @@ let shiftOpenWeeks=[];
 let shiftSelectedWeek="";
 let shiftSubmitting=false;
 const shiftWeekSelect=document.getElementById("shiftWeekSelect");
+const shiftOpenWeekPicker=document.getElementById("shiftOpenWeekPicker");
+function shiftWeekButtonLabel(week){
+  const end=shiftDateAdd(week,6);
+  const short=date=>date.split("-").slice(1).map(Number).join("/");
+  return short(week)+"（一）–"+short(end)+"（日）";
+}
+function renderShiftWeekButtons(){
+  shiftOpenWeekPicker.replaceChildren();
+  for(const week of shiftOpenWeeks){
+    const button=document.createElement("button");
+    button.type="button";button.className="shift-open-week-btn"+(week===shiftSelectedWeek?" active":"");
+    button.dataset.shiftOpenWeek=week;button.textContent=shiftWeekButtonLabel(week);
+    button.setAttribute("aria-pressed",String(week===shiftSelectedWeek));
+    button.disabled=shiftSubmitting;
+    shiftOpenWeekPicker.appendChild(button);
+  }
+}
+shiftOpenWeekPicker.addEventListener("click",event=>{
+  const button=event.target.closest("[data-shift-open-week]");
+  if(!button||shiftSubmitting)return;
+  const week=button.dataset.shiftOpenWeek;
+  shiftWeekSelect.value=week;shiftWeekSelect.dispatchEvent(new Event("change"));
+});
+function updateShiftDayDates(week){
+  [...shiftDaysContainer.querySelectorAll("[data-shift-day]")].forEach((day,index)=>{
+    const weekday=["週一","週二","週三","週四","週五","週六","週日"][index];
+    const label=day.querySelector(".shift-day-name");label.replaceChildren();
+    if(week){
+      const date=shiftDateAdd(week,index).split("-").slice(1).map(Number).join("/");
+      const dateSpan=document.createElement("span");dateSpan.className="shift-day-date";dateSpan.textContent=date;label.appendChild(dateSpan);
+      for(const input of day.querySelectorAll("[data-shift-start],[data-shift-end]")){
+        input.setAttribute("aria-label",date+" "+weekday+(input.hasAttribute("data-shift-start")?"開始時間":"結束時間"));
+      }
+    }
+    const weekdaySpan=document.createElement("span");weekdaySpan.className="shift-day-weekday";weekdaySpan.textContent=weekday;label.appendChild(weekdaySpan);
+  });
+}
 function currentShiftMonday(){
   const p=taipeiShiftNow();
   return shiftDateAdd(shiftISO(p.y,p.m,p.d),-((p.dow+6)%7));
@@ -4488,6 +4562,7 @@ function renderShiftWeekChoices(){
   }
   shiftWeekSelect.value=shiftSelectedWeek;
   shiftWeekSelect.disabled=shiftSubmitting||!shiftOpenWeeks.length;
+  renderShiftWeekButtons();
 }
 function shiftHasDraft(){
   return [...shiftDaysContainer.querySelectorAll("[data-shift-start],[data-shift-end]")].some(input=>input.value!=="")
@@ -4505,10 +4580,11 @@ shiftWeekSelect.addEventListener("change",()=>{
 });
 function updateShiftWindow(){
   const cycle=getShiftSubmissionCycle();
+  renderShiftWeekButtons();updateShiftDayDates(cycle.weekStart);
   shiftWeekLabel.textContent=cycle.weekStart?"填寫週次："+shiftRangeLabel(cycle.weekStart):"目前沒有開放的週次";
   if(!cycle.open){shiftWindowMessage.textContent="此週次目前未開放或已關閉，請選擇其他開放週次；已填內容仍保留。";shiftWindowMessage.className="hint shift-window-closed";}
   else if(cycle.testMode){shiftWindowMessage.textContent="測試模式開放｜提交會標記為測試資料。";shiftWindowMessage.className="hint shift-window-test";}
-  else{shiftWindowMessage.textContent="目前已開放｜請確認選定週次後填寫，提交視為正式資料。";shiftWindowMessage.className="hint shift-window-open";}
+  else{shiftWindowMessage.textContent="本週已由後台開放｜請依顯示的日期與星期填寫。";shiftWindowMessage.className="hint shift-window-open";}
   shiftSubmitBtn.disabled=shiftSubmitting||!cycle.open;return cycle;
 }
 async function enterShiftMode(){
