@@ -1,0 +1,8 @@
+/* Dashboard only: explicit T995 typography intent, avoiding body inherit fallback. */
+body{font-family:"Microsoft JhengHei","微軟正黑體","PingFang TC",Arial,sans-serif;font-weight:700}
+body *{font-family:inherit}
+h1,h2,h3,h4{font-weight:900}
+button,input,select,textarea,.subtitle,.metric-subtitle{font-weight:800}
+.table th,.ops-weather-observations th{font-weight:800}
+.table td,.ops-weather-observations td{font-weight:700}
+.ops-weather-card strong,.score-metric-title{font-weight:900}

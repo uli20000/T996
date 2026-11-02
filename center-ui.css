@@ -1,0 +1,19 @@
+/* Shared T996 visual rhythm; existing module structure and bold text retained. */
+body,button,input,select,textarea{font-family:"Microsoft JhengHei","微軟正黑體",sans-serif}
+button{font-weight:700}h1,h2,h3,.section-title,.title{text-align:center}
+.admin-menu{grid-template-columns:1fr;gap:10px}
+.admin-mode-btn{min-width:0;min-height:84px;text-align:center;font-weight:800!important}
+.ops-form-grid>*{min-width:0}.ops-weather-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.ops-config-pending{padding:14px;margin:12px 0;border:1px solid #ddd8ce;border-radius:12px;background:#fff8df;text-align:center;line-height:1.7}
+@media(max-width:600px){.admin-menu{gap:10px}.admin-mode-btn{padding:12px 6px}.ops-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.ops-tabs button{min-width:0;white-space:normal}.ops-weather-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.ops-weather-table{min-width:580px}}
+
+/* T995 admin title and mobile entrance dimensions. */
+body:has(#adminApp) .title{font-weight:900}
+@media(max-width:700px){.admin-mode-btn{min-height:82px}}
+/* Four representative counties share one balanced weather view. */
+.ops-weather-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.ops-weather-grid .ops-weather-card{min-width:0;padding:14px;border:1px solid #ddd8ce;border-radius:12px;text-align:center;line-height:1.7;background:#faf8f4}
+.ops-weather-grid h4{margin:0 0 8px}.ops-weather-grid strong{display:block;font-size:17px}.ops-weather-grid small{display:block;margin-top:8px}
+.ops-weather-scroll{max-width:100%;overflow:auto}.ops-weather-observations{width:100%;min-width:720px;border-collapse:collapse;font-size:13px}.ops-weather-observations td,.ops-weather-observations th{padding:10px;border-bottom:1px solid #ddd8ce;text-align:center;min-width:130px}.ops-weather-source{font-size:12px;line-height:1.7;margin-top:12px;text-align:center}
+@media(min-width:1100px){.ops-weather-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:600px){.ops-weather-grid{gap:8px}.ops-weather-grid .ops-weather-card{padding:10px 6px;font-size:13px}.ops-weather-grid strong{font-size:15px}.ops-weather-grid h4{font-size:13px}}

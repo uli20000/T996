@@ -2,6 +2,7 @@
 <!-- T996 V7: rolling 8 complete same-weekday samples, searched up to 26 weeks; center excluded; actual TC authoritative. -->
 <html lang="zh-Hant">
 <head>
+<script src="display-mode.js?v=996-20261102"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#f4f0e8">
@@ -1273,6 +1274,10 @@ button{cursor:pointer}
 }
 
 </style>
+<script src="center-config.js?v=996-20261101-1"></script>
+<link rel="stylesheet" href="center-ui.css?v=996-weather-20261101">
+<link rel="stylesheet" href="operations-report.css?v=996-sync-20261102">
+<link rel="stylesheet" href="display-mode.css?v=996-20261102">
 </head>
 
 <body>
@@ -1317,31 +1322,108 @@ button{cursor:pointer}
 </header>
 
 <div id="adminModeMenu" class="admin-menu">
-  <button id="vehicleModeBtn" class="admin-mode-btn" type="button">
+<button id="vehicleModeBtn" class="admin-mode-btn" type="button">
     <span class="icon">🚗</span>
     車輛管理
   </button>
-  <button id="batteryModeBtn" class="admin-mode-btn" type="button">
+<button id="opsModeBtn" class="admin-mode-btn" type="button"><span class="icon">🍽️</span>營運管理</button>
+<button id="batteryModeBtn" class="admin-mode-btn" type="button">
     <span class="icon">🔋</span>
     設備管理
   </button>
-  <button id="defensiveModeBtn" class="admin-mode-btn" type="button">
+<button id="defensiveModeBtn" class="admin-mode-btn" type="button">
     <span class="icon">🛡️</span>
     防禦駕駛
   </button>
-  <button id="surveyModeBtn" class="admin-mode-btn" type="button">
+<button id="surveyModeBtn" class="admin-mode-btn" type="button">
     <span class="icon">📋</span>
     意向調查
   </button>
-  <button id="rosterModeBtn" class="admin-mode-btn" type="button">
-    <span class="icon">👥</span>
-    在職名單
-  </button>
-  <button id="shiftModeBtn" class="admin-mode-btn" type="button">
+<button id="shiftModeBtn" class="admin-mode-btn" type="button">
     <span class="icon">🗓️</span>
     指休管理
   </button>
+<button id="rosterModeBtn" class="admin-mode-btn" type="button">
+    <span class="icon">👥</span>
+    在職名單
+  </button>
 </div>
+
+<section id="opsModePage" class="admin-mode-page">
+  <div class="mode-back-row"><button id="opsBackBtn" class="action-btn" type="button">← 返回後台入口</button></div>
+  <section class="section ops-section">
+    <div class="section-title">營運管理</div>
+    <div id="opsGlobalDateToolbar" class="ops-entry-date-toolbar ops-global-date-toolbar">
+      <div class="ops-date-nav"><button id="opsGlobalPrev" type="button" aria-label="前一個日期區間">‹</button><input id="opsGlobalDate" type="date" aria-label="營運統計日期"><button id="opsGlobalNext" type="button" aria-label="後一個日期區間">›</button></div>
+      <div id="opsGlobalPeriodTabs" class="ops-mini-tabs"><button type="button" data-period="day" class="active">日</button><button type="button" data-period="week">週</button><button type="button" data-period="month">月</button></div>
+      <div class="ops-date-actions"><button id="opsGlobalRefresh" type="button" class="action-btn">重新整理</button><a class="action-btn" href="analysis.html" aria-label="開啟營運分析儀表板">儀表板</a><button type="button" class="action-btn" data-display-mode-toggle>☀️</button></div>
+    </div>
+    <div id="opsGlobalPeriodChoices" class="ops-period-choices" hidden aria-live="polite"></div>
+    <div class="ops-tabs">
+      <button type="button" class="ops-tab active" data-ops-tab="delay">等餐紀錄</button>
+      <button type="button" class="ops-tab" data-ops-tab="line">劃線／簽名</button>
+      <button type="button" class="ops-tab" data-ops-tab="scores">當日成績</button>
+      <button type="button" class="ops-tab" data-ops-tab="summary">匯總資料</button>
+    </div>
+    <div id="opsDelayPanel" class="ops-panel">
+      <div class="ops-form-grid ops-entry-row ops-delay-entry-row">
+
+        <label>店號<input id="opsDelayStore" type="text" inputmode="numeric" maxlength="3" placeholder="輸入店號" autocomplete="off"><span id="opsDelayStoreName" class="ops-lookup" aria-live="polite"></span><div id="opsDelayStoreChoices" class="ops-store-choices"></div></label>
+        <label>編號<input id="opsDelayOrder" type="text" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="4 碼"></label>
+        <button id="opsDelaySave" type="button" class="action-btn primary">新增</button>
+        <label>餐廳查詢<input id="opsDelaySearch" type="search" placeholder="輸入店號或餐廳名稱"></label>
+      </div>
+      <div id="opsDelayMessage" class="ops-message" role="status"></div>
+      <h3 id="opsDelayListTitle">當日紀錄</h3>
+      <div id="opsDelayList" class="ops-table-wrap"></div>
+    </div>
+    <div id="opsLinePanel" class="ops-panel" hidden>
+      <div class="ops-line-toolbar-row">
+        <div id="opsLineStats" class="ops-line-stats"></div>
+        <label class="ops-line-search"><input id="opsLineSearch" type="search" aria-label="餐廳查詢" placeholder="輸入店號或餐廳名稱"></label>
+      </div>
+      <div class="ops-form-grid ops-entry-row">
+
+        <label>店號<input id="opsLineStore" type="text" inputmode="numeric" maxlength="3" placeholder="輸入店號" autocomplete="off"><span id="opsLineStoreName" class="ops-lookup" aria-live="polite"></span><div id="opsLineStoreChoices" class="ops-store-choices"></div></label>
+        <div class="ops-line-control"><span>劃線／簽名</span><div class="ops-toggle-group"><button type="button" id="opsLineMark" class="ops-toggle" aria-pressed="false">劃線</button><button type="button" id="opsSignMark" class="ops-toggle" aria-pressed="false">簽名</button></div></div>
+        <input id="opsSigner" type="hidden">
+        <input id="opsLineNote" type="hidden">
+        <button id="opsLineSave" type="button" class="action-btn primary">新增</button>
+      </div>
+      <div id="opsLineMessage" class="ops-message" role="status"></div>
+      <h3 id="opsLineListTitle">餐廳狀態</h3><div id="opsLineList" class="ops-table-wrap"></div>
+    </div>
+    <div id="opsScoresPanel" class="ops-panel" hidden>
+      <div class="ops-upload-block"><h3>匯入當日成績</h3><div class="ops-score-upload"><label class="ops-score-file-button">選擇兩個 Excel<input id="opsScoreFiles" type="file" accept=".xlsx,.xls,.xlsm" multiple></label></div><div id="opsScorePreview" class="ops-table-wrap"></div><button id="opsScoreImport" type="button" class="action-btn primary" disabled>匯入當日成績</button><div id="opsScoreMessage" class="ops-message" role="status"></div></div>
+      <div id="opsFileStatus" class="ops-file-status"></div><h3 id="opsPeriodLabel">區域成績</h3>
+      <div id="opsReportWarnings" class="ops-report-warnings" hidden></div>
+      <div id="opsAnalysisSummary"></div>
+      <section class="ops-report-card"><h3>區域成績與工時</h3><div id="opsAnalysisTable"></div><div id="opsLaborAdjustments"></div></section><section class="ops-report-card"><h3>各區天氣</h3><div id="opsWeather" aria-live="polite"></div></section><section class="ops-report-card"><h3>每日成績</h3><div id="opsDayList" class="ops-table-wrap"></div></section>
+      <div id="opsReportStatus" class="ops-report-status" role="status"></div>
+      <details class="ops-month-fold"><summary>各區每日／整月工時</summary><div id="opsMonthHours"></div></details>
+    </div>
+    <div id="opsSummaryPanel" class="ops-panel" hidden>
+      <div id="opsSummaryWarnings" class="ops-report-warnings" hidden></div>
+      <div id="opsSummaryMetrics"></div>
+      <div class="ops-ranking-grid">
+        <section class="ops-report-card"><h3>等餐列</h3><h4>AC（等餐最多）</h4><div id="opsDelayAcSummary"></div><h4>前三多餐廳</h4><div id="opsDelayRank"></div></section>
+        <section class="ops-report-card"><h3>劃線簽名列</h3><h4>AC（達標率最低）</h4><div id="opsLineAcSummary"></div><h4>前三低餐廳</h4><div id="opsLineRank"></div></section>
+      </div>
+      <section class="ops-report-card"><h3>各區天氣</h3><div id="opsSummaryWeather" aria-live="polite"></div></section>
+      <div id="opsSummaryStatus" class="ops-report-status" role="status"></div>
+      <div id="opsLinksPanel" class="ops-shared-link ops-compact-actions">
+        <div class="ops-export-link-row">
+          <div class="ops-export-bottom"><button id="opsExportSelected" type="button" class="action-btn primary" title="匯出上方日期控制所選期間">匯出報表</button></div>
+          <input id="opsLinkMonth" type="month" aria-label="等餐回覆連結月份" aria-describedby="opsLinkMonthPreview" title="等餐回覆連結月份">
+          <button id="opsLinkCreate" type="button" class="action-btn" title="產生所選月份的等餐回覆連結">產生月份連結</button>
+        </div>
+        <span id="opsLinkMonthPreview" class="ops-sr-only" aria-live="polite"></span>
+        <div id="opsLinkMessage" class="ops-message" role="status"></div>
+        <div id="opsLinkResult" class="ops-link-result" hidden><strong id="opsLinkMonthLabel"></strong><input id="opsLinkUrl" type="text" readonly><button id="opsLinkCopy" type="button" class="action-btn">複製連結</button></div>
+      </div>
+    </div>
+  </section>
+</section>
 
 <section id="vehicleModePage" class="admin-mode-page">
 
@@ -1489,22 +1571,7 @@ button{cursor:pointer}
     <div class="section-title">新增正常設備</div>
     <div class="search-box device-add-panel">
       <div id="deviceRegisterIntro" class="device-add-intro">查無此設備，請補充資料後新增。新增的設備會直接設定為正常。</div>
-      <select id="deviceRegisterRestaurant" class="search-input">
-        <option value="">請選擇電池所在餐廳</option>
-        <option value="093">林口文化（093）</option><option value="018">林口復興（018）</option><option value="099">南崁中正（099）</option>
-            <option value="201">台中台茂（201）</option><option value="095">中壢環中東（095）</option><option value="209">中壢環中東二（209）</option>
-            <option value="137">台中大園（137）</option><option value="062">龍潭北龍（062）</option><option value="154">新竹清大（154）</option>
-            <option value="227">台中新屋（227）</option><option value="248">台中領航（248）</option><option value="041">楊梅中山（041）</option>
-            <option value="161">楊梅大成（161）</option><option value="516">中壢中正（516）</option><option value="544">中壢中和（544）</option>
-            <option value="084">中壢民族（084）</option><option value="242">中壢過嶺（242）</option><option value="580">苗栗頭份（580）</option>
-            <option value="133">新竹新豐（133）</option><option value="203">新竹湖口（203）</option><option value="562">新竹竹北（562）</option>
-            <option value="144">竹北自強（144）</option><option value="587">新竹民生（587）</option><option value="066">新竹竹東（066）</option>
-            <option value="214">新竹中正（214）</option><option value="594">新竹亞太（594）</option><option value="235">竹北中華（235）</option>
-            <option value="025">苗栗中正（025）</option><option value="173">苗栗竹南（173）</option><option value="142">台中桃營（142）</option>
-            <option value="182">台中萬壽（182）</option><option value="167">台中介壽（167）</option><option value="165">台中南平（165）</option>
-            <option value="179">台中大竹（179）</option><option value="190">台中大溪（190）</option><option value="098">台中大興西（098）</option>
-            <option value="183">台中中山二（183）</option><option value="013">新竹光復（013）</option>
-      </select>
+      <select id="deviceRegisterRestaurant" class="search-input"><option value="">請選擇電池所在餐廳</option><option value="040">台中五權（040）</option><option value="035">台中五權西（035）</option><option value="172">台中五權西二（172）</option><option value="186">台中公益（186）</option><option value="132">台中後車站（132）</option><option value="159">台中站前（159）</option><option value="069">太平中山（069）</option><option value="185">台中文心三（185）</option><option value="219">台中東海（219）</option><option value="021">台中永福（021）</option><option value="171">台中河南（171）</option><option value="176">台中福星（176）</option><option value="163">西屯家樂福（163）</option><option value="206">台中中清（206）</option><option value="246">台中北屯（246）</option><option value="593">台中大雅（593）</option><option value="200">台中崇德（200）</option><option value="010">台中文心（010）</option><option value="184">台中文心二（184）</option><option value="131">台中潭子（131）</option><option value="071">台中烏日（071）</option><option value="228">台中霧峰（228）</option><option value="136">大里中興二（136）</option><option value="585">大里國光（585）</option><option value="222">台中大甲（222）</option><option value="247">台中梧棲（247）</option><option value="063">台中沙鹿（063）</option><option value="210">台中清水（210）</option><option value="528">台中豐原（528）</option><option value="148">南投南崗（148）</option><option value="064">南投埔里（064）</option><option value="231">南投竹山（231）</option><option value="108">南投草屯（108）</option><option value="007">彰化中山（007）</option><option value="170">彰化和美（170）</option><option value="031">彰化金馬（031）</option><option value="025">苗栗中正（025）</option><option value="173">苗栗竹南（173）</option><option value="580">苗栗頭份（580）</option><option value="195">彰化北斗（195）</option><option value="568">彰化員林（568）</option><option value="212">彰化花壇（212）</option><option value="125">彰化鹿港（125）</option></select>
       <select id="deviceRegisterSize" class="search-input" style="margin-top:10px;display:none">
         <option value="large">A10／大台</option>
         <option value="small">C100／小台</option>
@@ -1567,7 +1634,7 @@ button{cursor:pointer}
       <select id="employeeAreaInput" class="employee-add-area" aria-label="新員工區域">
         <option value="">選擇區域</option>
         <option value="A">A 區</option><option value="B">B 區</option><option value="C">C 區</option>
-        <option value="D">D 區</option><option value="E">E 區</option><option value="G">G 區</option>
+        <option value="D">D 區</option><option value="E">E 區</option><option value="F">F 區</option><option value="G">G 區</option>
         <option value="H">H 區</option><option value="I">I 區</option>
       </select>
       <button id="employeeAddBtn" class="action-btn employee-add-btn" type="button">＋ 新增</button>
@@ -4920,6 +4987,7 @@ todayDate.textContent =
   new Date().toLocaleDateString(
     "zh-TW",
     {
+      timeZone:"Asia/Taipei",
       year:"numeric",
       month:"long",
       day:"numeric",
@@ -4962,6 +5030,7 @@ function lockAdmin(message=""){
 async function unlockAdmin(session){
   if(!session?.user?.email){ lockAdmin(); return; }
   const email = String(session.user.email).trim().toLowerCase();
+  const preserveMode=adminApp.style.display==='block'&&adminSessionEmail.textContent===`已登入：${email}`;
   const allow = await db.from("admin_allowlist").select("email").ilike("email", email).eq("active", true).maybeSingle();
   if(allow.error){
     await db.auth.signOut();
@@ -4978,7 +5047,7 @@ async function unlockAdmin(session){
   adminSessionBar.style.display = "flex";
   adminSessionEmail.textContent = `已登入：${email}`;
   showAuthMessage("", true);
-  showAdminMode("home");
+  if(!preserveMode)showAdminMode("home");
 }
 
 authPasswordToggle.onclick = () => {
@@ -5081,7 +5150,7 @@ let t995ShiftOpenWeeks=new Set();
 let t995StaffingSettings={target_tplh:2.5,max_third_party_usage_pct:20,forecast_weeks:8,shift_test_mode:false};
 let t995AreaMap=new Map();
 let t995AreaMapLoaded=false;
-const T996_ACTIVE_AREA_CODES=["A","B","C","D","E","G","H","I"];
+const T996_ACTIVE_AREA_CODES=["A","B","C","D","E","F","G","H","I"];
 const T996_AREA_SORT=["A","B","C","D","E","F","G","H","I","J","K"];
 
 function t995RenderEmployeeDirectory(){
@@ -5957,5 +6026,163 @@ vehicleList.addEventListener("click",event=>{
 
 
 
+<script>
+/* 營運管理共用介面。分頁與登記邏輯位於 operations-entry.js。 */
+const opsToday=()=>new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Taipei",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+function opsEscape(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+const opsSetToggle=(id,on)=>{const b=$(id);b.classList.toggle("selected",on);b.setAttribute("aria-pressed",String(on));};
+
+/* 每日成績報表：辨識 ByDate／ByOrder，排除不必要個資欄位後寫入歷史資料表。 */
+const opsScoreFileInput=$("opsScoreFiles");
+let opsPreparedScoreFiles=[];
+const opsByDateColumns=["訂單號碼","ID（門市名稱／代號）","訂單日期","指派時間","QT","留店時間","外送時間（去）","外送達成時間（D30)","外出時間 (車程)","完成整張外送時間","距離"];
+const opsByOrderColumns=["reg order id","RC","AC","ID","訂單","自動/手動","落單時間","預計送達時間","原預計送達時間","指派時間","門市到達時間","外送出發","到達時間","到店時間","外送員留店時間","遲到時間","Quote Time","配送費","餐點金額","結算金額","距離","外送員","D7","D25"];
+function opsXlsxValue(value){
+  if(value instanceof Date){const d=new Date(value.getTime()-value.getTimezoneOffset()*60000);return d.toISOString().slice(0,19).replace("T"," ");}
+  return value;
+}
+function opsDateIso(value){
+  if(value instanceof Date&&!Number.isNaN(value.getTime())){const d=new Date(value.getTime()-value.getTimezoneOffset()*60000);return d.toISOString().slice(0,10);}
+  if(typeof value==="number"&&window.XLSX?.SSF?.parse_date_code){const d=XLSX.SSF.parse_date_code(value);if(d?.y&&d?.m&&d?.d)return String(d.y).padStart(4,"0")+"-"+String(d.m).padStart(2,"0")+"-"+String(d.d).padStart(2,"0");}
+  const text=String(value??"").trim();let m=text.match(/^(20\d{2})[./-](\d{1,2})[./-](\d{1,2})/);
+  if(m)return opsValidIsoDate(Number(m[1]),Number(m[2]),Number(m[3]));
+  m=text.match(/^(\d{1,2})[./-](\d{1,2})[./-](20\d{2})/);
+  if(m)return opsValidIsoDate(Number(m[3]),Number(m[1]),Number(m[2]));
+  return "";
+}
+function opsValidIsoDate(y,m,d){const value=new Date(Date.UTC(y,m-1,d));return value.getUTCFullYear()===y&&value.getUTCMonth()===m-1&&value.getUTCDate()===d?String(y).padStart(4,"0")+"-"+String(m).padStart(2,"0")+"-"+String(d).padStart(2,"0"):"";}
+function opsScorePair(){
+  if(opsPreparedScoreFiles.length!==2)return null;
+  const byType=Object.fromEntries(opsPreparedScoreFiles.map(x=>[x.type,x]));if(!byType.ByDate||!byType.ByOrder)return null;
+  const a=byType.ByDate.dates,b=byType.ByOrder.dates;if(a.length!==b.length||a.some((d,i)=>d!==b[i]))return null;
+  const keys=item=>{const map=new Map();for(const row of item.rows){const key=row.record_date+'|'+row.store_code+'|'+String(row.order_number).slice(-4);map.set(key,(map.get(key)||0)+1);}return map;};
+  const dates=keys(byType.ByDate),orders=keys(byType.ByOrder);let paired=0,ambiguous=0;
+  for(const [key,n] of orders){if(n===1&&dates.get(key)===1)paired++;else if(dates.has(key))ambiguous++;}
+  return {byType,dates:a,reconciliation:{paired,ambiguous,unmatchedByDate:[...dates.keys()].filter(k=>!orders.has(k)).length,unmatchedByOrder:[...orders.keys()].filter(k=>!dates.has(k)).length,duplicateByDate:[...dates.values()].filter(n=>n>1).length,duplicateByOrder:[...orders.values()].filter(n=>n>1).length}};
+}
+async function opsParseScoreFile(file){
+  if(!window.XLSX)throw new Error("Excel 元件尚未載入，請重新整理後再試。");
+  const wb=XLSX.read(await file.arrayBuffer(),{type:"array",cellDates:true});
+  if(!wb.SheetNames.length)throw new Error('檔案沒有工作表。');
+  const matrix=[],sourceRows=[];let firstHeaders=null;
+  for(const name of wb.SheetNames){
+    const part=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,defval:'',raw:true});
+    if(!part.some(row=>row.some(v=>v!==''&&v!==null&&v!==undefined)))continue;
+    const h=part[0].map(v=>String(v??'').trim());
+    if(!h.includes('訂單號碼')&&!h.some(v=>v.toLowerCase()==='reg order id'))throw new Error('工作表 '+name+' 無法辨識報表欄位');
+    if(!firstHeaders){firstHeaders=h;matrix.push(h);}
+    for(let i=1;i<part.length;i++){matrix.push(firstHeaders.map(key=>part[i][h.indexOf(key)]??''));sourceRows.push({sheet:name,row:i+1});}
+  }
+  if(!matrix.length)throw new Error("工作表沒有資料。");
+  const headers=matrix[0].map(v=>String(v??"").trim());
+  const lower=headers.map(v=>v.toLowerCase());
+  let type="";
+  if(headers.includes("訂單號碼")&&headers.some(v=>v.includes("門市名稱／代號"))&&headers.includes("QT"))type="ByDate";
+  else if(lower.includes("reg order id")&&headers.includes("落單時間")&&headers.includes("D25"))type="ByOrder";
+  else throw new Error("無法辨識報表格式；請選 ByDate 或 ByOrder Excel 檔。");
+  const allowed=type==="ByDate"?opsByDateColumns:opsByOrderColumns;
+  const indices=allowed.map(name=>headers.indexOf(name));
+  const orderHeader=type==="ByDate"?"訂單號碼":"reg order id";
+  const dateHeader=type==="ByDate"?"訂單日期":"落單時間";
+  const restaurantHeader=type==="ByDate"?"ID（門市名稱／代號）":"ID";
+  const fileDates=[...new Set([...String(file.name).matchAll(/20\d{2}[.-]\d{2}[.-]\d{2}/g)].map(x=>x[0]))],fileDate=fileDates.length===1?opsDateIso(fileDates[0]):"";
+  const rows=[];
+  matrix.slice(1).forEach((cells,index)=>{
+    if(!cells.some(v=>v!==""&&v!==null&&v!==undefined))return;
+    const payload={};
+    indices.forEach((column,i)=>{if(column<0)return;const value=cells[column];if(value===""||value===null||value===undefined)return;payload[allowed[i]]=opsXlsxValue(value);});
+    const orderNo=String(payload[orderHeader]??"").trim();
+    const restaurantRaw=String(payload[restaurantHeader]??"").trim();
+    const codeMatch=(type==="ByDate"?restaurantRaw:orderNo).match(/(?:TWI|TWB)(\d{3})/i);
+    const storeCode=codeMatch?codeMatch[1]:"";
+    const restaurantName=type==="ByDate"?restaurantRaw.split(/[/／]/)[0].trim():restaurantRaw;
+    const dateValue=cells[headers.indexOf(dateHeader)],dateText=opsDateIso(dateValue)||fileDate;
+    rows.push({row_number:index+2,record_date:dateText,store_code:storeCode,restaurant_name:restaurantName,order_number:orderNo,payload});
+  });
+  if(type==="ByOrder"){
+    const courierIds=new Map(),courierOrders=new Map(),dispatchWaves=new Map();
+    for(const row of rows){
+      const payload=row.payload||{},courierName=String(payload["外送員"]??"").trim(),assigned=String(payload["指派時間"]??"").trim().replace("T"," ").slice(0,19);
+      delete payload["外送員"];
+      if(!courierName||String(payload["自動/手動"]||"").trim()==="第三方")continue;
+      const courierKey=row.record_date+"|"+courierName.toLocaleLowerCase();
+      if(!courierIds.has(courierKey))courierIds.set(courierKey,window.crypto?.randomUUID?.()||("courier-"+(courierIds.size+1)));
+      const courierId=courierIds.get(courierKey);payload._courier_day_id=courierId;
+      const riderOrders=courierOrders.get(courierId)||[];riderOrders.push(row);courierOrders.set(courierId,riderOrders);
+      if(assigned){const waveKey=row.record_date+"|"+courierId+"|"+assigned,wave=dispatchWaves.get(waveKey)||[];wave.push(row);dispatchWaves.set(waveKey,wave);}
+    }
+    for(const riderOrders of courierOrders.values()){
+      const storeCount=new Set(riderOrders.map(row=>row.store_code).filter(Boolean)).size;
+      for(const row of riderOrders)row.payload._courier_day_store_count=storeCount;
+    }
+    for(const wave of dispatchWaves.values()){
+      const storeCount=new Set(wave.map(row=>row.store_code).filter(Boolean)).size;
+      for(const row of wave){row.payload._dispatch_wave_size=wave.length;row.payload._dispatch_wave_store_count=storeCount;}
+    }
+  }
+  if(!rows.length)throw new Error("報表沒有可匯入的訂單資料列。");
+  if(rows.some(r=>!r.record_date))throw new Error("有訂單列沒有可辨識的日期；請使用含日期欄的報表。");
+  const catalog=new Map(window.T996Config.restaurants.map(x=>[x.store_code,x]));
+  for(const row of rows){
+    const source=sourceRows[row.row_number-2];row.payload._source_sheet=source.sheet;row.payload._source_row=source.row;
+    const store=catalog.get(row.store_code);
+    if(!store)throw new Error('非996店號或無法辨識店號：第 '+row.row_number+' 列');
+    if(row.record_date<window.T996Config.activationDate)throw new Error('新營運資料自 '+window.T996Config.activationDate+' 啟用，第 '+row.row_number+' 列日期較早');
+    if(type==='ByOrder'&&String(row.payload.RC||'').trim()&&!/^(?:TWI|T)?996$/i.test(String(row.payload.RC).trim()))throw new Error('第 '+row.row_number+' 列中心不屬於996');
+    if(!row.order_number)throw new Error('第 '+row.row_number+' 列缺少訂單編號');
+    row.restaurant_name=store.restaurant_name;
+  }
+  const dates=[...new Set(rows.map(r=>r.record_date))].sort();
+  return {file,type,dates,rows};
+}
+function opsRenderPreparedScoreFiles(errors=[]){
+  const data=opsPreparedScoreFiles.map(x=>({file:x.file.name,type:x.type,date:x.dates.length===1?x.dates[0]:x.dates[0]+"～"+x.dates.at(-1)+"（"+x.dates.length+"天）",count:x.rows.length,status:"待匯入"}));
+  const failed=errors.map(x=>({file:x.file,type:"—",date:"—",count:"—",status:x.error}));
+  const all=[...data,...failed];
+  $("opsScorePreview").innerHTML=all.length
+    ?'<table class="ops-table"><thead><tr><th>檔案</th><th>報表類型</th><th>日期</th><th>資料筆數</th><th>狀態</th></tr></thead><tbody>'+all.map(x=>'<tr><td>'+opsEscape(x.file)+'</td><td>'+opsEscape(x.type)+'</td><td>'+opsEscape(x.date)+'</td><td>'+opsEscape(x.count)+'</td><td>'+opsEscape(x.status)+'</td></tr>').join("")+'</tbody></table>'
+    :"";
+  const pair=opsScorePair();$('opsScoreImport').disabled=!pair;
+  if(pair){const r=pair.reconciliation;$('opsScorePreview').insertAdjacentHTML('beforeend','<div class="ops-config-pending">日期／店號／訂單末四碼核對：可唯一配對 '+r.paired+' 筆；ByDate 未配對 '+r.unmatchedByDate+' 鍵；ByOrder 未配對 '+r.unmatchedByOrder+' 鍵；配對歧義 '+r.ambiguous+' 鍵；重複鍵 ByDate '+r.duplicateByDate+'／ByOrder '+r.duplicateByOrder+'。未配對不視為已配對。</div>');}
+}
+opsScoreFileInput.addEventListener("change",async()=>{
+  opsPreparedScoreFiles=[];$("opsScoreImport").disabled=true;$("opsScoreMessage").textContent="讀取與辨識檔案中…";
+  const errors=[];
+  for(const file of [...(opsScoreFileInput.files||[])]){
+    try{opsPreparedScoreFiles.push(await opsParseScoreFile(file));}
+    catch(e){errors.push({file:file.name,error:e.message||"檔案無法讀取"});}
+  }
+  opsRenderPreparedScoreFiles(errors);
+  const pair=opsScorePair();$("opsScoreMessage").textContent=errors.length?"辨識完成；"+errors.length+" 個檔案格式不符或無法讀取。":pair?"兩份檔案日期一致，共 "+pair.dates.length+" 天，可匯入。":"請選擇一份 ByDate 與一份 ByOrder 檔案，且兩份檔案的日期範圍需一致。";
+});
+$("opsScoreImport").onclick=async()=>{
+  const pair=opsScorePair();if(!pair){$("opsScoreMessage").textContent="請選擇一份 ByDate 與一份 ByOrder 檔案，且兩份檔案的日期範圍需一致。";return;}
+  $("opsScoreImport").disabled=true;$("opsScoreMessage").textContent="匯入資料中…";
+  const importedDate=pair.dates.at(-1);let completed=0,archiveIds=[];
+  try{
+    $('opsScoreMessage').textContent='封存並核對兩份原始 Excel…';
+    archiveIds=await window.T996Archive.archivePair(db,Object.values(pair.byType));
+    for(const date of pair.dates){
+      const results=await Promise.all(Object.values(pair.byType).map(item=>db.rpc("t996_import_score_batch",{p_report_date:date,p_report_type:item.type,p_source_file:item.file.name,p_rows:item.rows.filter(row=>row.record_date===date)})));
+      const failed=results.find(r=>r.error);if(failed)throw new Error("已完成 "+completed+"／"+pair.dates.length+" 天；日期 "+date+"："+failed.error.message);
+      completed++;$("opsScoreMessage").textContent="匯入中… "+completed+"／"+pair.dates.length+" 天";
+    }
+    await window.T996Archive.mark(db,archiveIds,'imported','');
+    $("opsScoreMessage").textContent="完成匯入 "+pair.dates.length+" 天（兩種報表已分別按日整理）。";
+    opsPreparedScoreFiles=[];opsScoreFileInput.value="";opsRenderPreparedScoreFiles();
+    window.OpsDateControl?.set(importedDate||opsToday(),"day",false);
+    await opsLoadDailyAnalytics();
+  }catch(e){let detail=e.message||'請檢查登入狀態';if(archiveIds.length){try{await window.T996Archive.mark(db,archiveIds,'partial',detail);}catch(markError){detail+='；封存狀態更新失敗：'+markError.message;}}$('opsScoreMessage').textContent='匯入中止：'+detail;}
+  finally{$("opsScoreImport").disabled=!opsScorePair();}
+};
+
+
+</script>
+<script src="source-archive.js?v=996-20261101-1"></script>
+<script src="operations-weather.js?v=996-weather-20261101"></script>
+<script src="operations-metrics.js?v=996-20261101-1"></script>
+<script src="operations-summary.js?v=996-20261101-1"></script>
+<script src="operations-report.js?v=996-sync-20261102"></script>
+<script src="operations-entry.js?v=996-sync-20261102"></script>
 </body>
 </html>
