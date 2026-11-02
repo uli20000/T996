@@ -346,8 +346,8 @@
       "enabled": true
     }
   ],
-  "independentStores": null,
-  "nonDeliveryStores": null,
+  "independentStores": [],
+  "nonDeliveryStores": [],
   "targets": {
     "sstg": 0.042,
     "d7": 0.25,
