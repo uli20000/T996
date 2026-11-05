@@ -3,6 +3,7 @@
   "center": "T996",
   "centerName": "台中外送中心",
   "activationDate": "2026-11-01",
+  "feedbackHistoryStart": "2026-09-01",
   "supabaseUrl": "https://sumcbwhaksuktsplenxy.supabase.co",
   "supabaseKey": "sb_publishable_Rhx8DoZnDgRAaS397TR4Pg_eCpI9RGj",
   "areas": [
