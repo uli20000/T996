@@ -22,6 +22,7 @@ assert.match(T.trackingComparison(),/五週/);assert.match(T.trackingComparison(
 assert.equal(T.trackingStats(empty,{start:'2026-11-01',end:'2026-11-01'}).values.find(x=>x[0]==='去年TC')[1],null);
 T.state.period='week';T.state.metric='feedback';const gr={start:'2026-10-26',end:'2026-11-01'},gd={...empty,feedback:[{source_type:'GES',period_start:gr.start,period_end:gr.end,restaurant_name:'Synthetic franchise',store_code:null,response_count:162,osat_survey:.8}]};
 const rendered=T.feedbackPage(gd,null,gr);assert.match(rendered,/GES 中心篩選彙總/);assert.doesNotMatch(rendered,/opsFeedbackFiles|opsFeedbackImport|opsFeedbackPreview/);assert.match(rendered,/Synthetic franchise/);assert.match(T.trackingOverview(gd,gr),/80.0%/);assert.equal(T.feedbackCovered({...empty,feedback:[{source_type:'0800',raw_fields:{_coverage_start:'2026-10-01',_coverage_end:'2026-10-31'}}]},'0800',gr).length,1);
+const excludedGes={...gd,reports:[{record_date:'2026-10-27',score_excluded:true}]};assert.doesNotMatch(T.trackingOverview(excludedGes,gr),/80.0%/);assert.match(T.feedbackPage(excludedGes,null,gr),/不列為排除後成績/);
 const nodes=new Map(),element=id=>{if(!nodes.has(id))nodes.set(id,{innerHTML:'',hidden:false,remove(){}});return nodes.get(id);};
 const reportContext={window:{OpsMetrics:M,OpsSummary:S,T996Config:C,OpsDateControl:{period:'week',date:'2026-10-26'}},document:{getElementById:element},opsEscape:x=>String(x??'').replaceAll('<','&lt;'),opsToday:()=> '2026-11-05',console,Map,Set,Date,Intl};
 reportContext.globalThis=reportContext;
