@@ -33,7 +33,7 @@
       const recordDate=opsIsoDate(get('date'));if(!recordDate)continue;
       const matched=window.T996Config.restaurants.find(x=>clean(x.restaurant_name)===restaurant);const row={record_date:recordDate,store_code:matched?.store_code||null,area_name:area,restaurant_name:restaurant,source_channel:clean(get('channel')),feedback_kind:kind,complaint_type:complaintType,main_topic:clean(get('topic')),item_1:clean(get('item1')),item_2:clean(get('item2')),content:String(get('content')??'').trim(),invoice_number:clean(get('invoice')),work_order:clean(get('work')),followup_status:clean(get('follow')),raw_fields:Object.fromEntries(headers.map((h,i)=>[h||`欄位${i+1}`,cells[i] instanceof Date?opsIsoDate(cells[i]):cells[i]??'']))};
       const caseKey=row.work_order?`work:${row.work_order}:${row.main_topic}:${row.item_1}:${row.item_2}`:`hash:${await stableHash([recordDate,row.invoice_number,restaurant,row.main_topic,row.item_1,row.item_2,row.content])}`;
-      out.push(rowRecord('0800',caseKey,file,row));
+      row.source_row=matrix.indexOf(cells)+1;out.push(rowRecord('0800',caseKey,file,row));
     }
     if(!out.length)throw new Error('此 0800 檔沒有符合條件的資料：抱怨＋外送＋996已確認餐廳或台中外送中心。');
     return out;
@@ -47,10 +47,10 @@
       const get=k=>ix[k]>=0?cells[ix[k]]:'';
       const sourceRestaurant=clean(get('restaurant'));if(!(sourceRestaurant.includes('台中')&&sourceRestaurant.includes('外送中心')))continue;
       const recordDate=opsIsoDate(get('date')),orderNumber=clean(get('order')),storeCode=(orderNumber.match(/^(\d{3})/)||[])[1]||'';
-      if(!recordDate||!storeCode)continue;if(!stores.byCode.has(storeCode))throw new Error('4128 出現非996店號 '+storeCode+'，請核對來源。');
+      if(!recordDate||!storeCode)continue;if(storeCode!=='000'&&!stores.byCode.has(storeCode))throw new Error('4128 出現非996店號 '+storeCode+'，請核對來源。');
       const store=stores.byCode.get(storeCode),restaurantName=store?.restaurant_name||`未配對店號 ${storeCode}`;
-      const row={record_date:recordDate,area_name:clean(get('area'))||'外送中心',store_code:storeCode,restaurant_name:restaurantName,source_channel:clean(get('channel')),feedback_kind:clean(get('kind')),complaint_type:clean(get('type')),content:String(get('content')??'').trim(),order_number:orderNumber,work_order:clean(get('work')),followup_status:clean(get('follow')),raw_fields:Object.fromEntries(headers.map((h,i)=>[h||`欄位${i+1}`,cells[i] instanceof Date?opsIsoDate(cells[i]):cells[i]??'']))};
-      out.push(rowRecord('4128',keyParts([recordDate,orderNumber,row.work_order]),file,row));
+      const row={record_date:recordDate,area_name:clean(get('area'))||'外送中心',store_code:store?.store_code||null,restaurant_name:restaurantName,source_channel:clean(get('channel')),feedback_kind:clean(get('kind')),complaint_type:clean(get('type')),content:String(get('content')??'').trim(),order_number:orderNumber,work_order:clean(get('work')),followup_status:clean(get('follow')),raw_fields:Object.fromEntries(headers.map((h,i)=>[h||`欄位${i+1}`,cells[i] instanceof Date?opsIsoDate(cells[i]):cells[i]??'']))};
+      row.source_row=matrix.indexOf(cells)+1;out.push(rowRecord('4128',keyParts([recordDate,orderNumber,row.work_order]),file,row));
     }
     if(!out.length)throw new Error('此 4128 檔沒有台中外送中心且可辨識前三碼店號的資料。');
     return out;
@@ -70,7 +70,7 @@
     for(const cells of nonempty(matrix.slice(headerRow+1))){
       const restaurant=clean(cells[ix.restaurant]);if(!restaurant)continue;
       const store=stores.byName.get(restaurant);if(!store&&!centerScope)continue;const row={period_start:start,period_end:end,restaurant_name:restaurant,store_code:store?.store_code||null,response_count:Number(cells[ix.count])||0,score_1sat:percentage(cells[ix.one]),osat_survey:percentage(cells[ix.survey]),osat_google:percentage(cells[ix.google]),osat_delivery:percentage(cells[ix.delivery]),score_accuracy:percentage(cells[ix.accuracy]),score_environment:percentage(cells[ix.environment]),score_service:percentage(cells[ix.service]),score_speed:percentage(cells[ix.speed]),score_food:percentage(cells[ix.food]),raw_fields:{...Object.fromEntries(headers.map((h,i)=>[h||`欄位${i+1}`,cells[i]??''])),scope:centerScope?'center-franchise':'restaurant',filter_summary:filterText}};
-      out.push(rowRecord('GES',keyParts([start,end,centerScope?'center-franchise':'restaurant',restaurant]),file,row));
+      row.source_row=matrix.indexOf(cells)+1;out.push(rowRecord('GES',keyParts([start,end,centerScope?'center-franchise':'restaurant',restaurant]),file,row));
     }
     if(!out.length)throw new Error('GES 檔沒有餐廳彙總列。');
     return out;
