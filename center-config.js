@@ -69,7 +69,7 @@
     {
       "area_code": "A",
       "restaurant_name": "台中公益",
-      "store_code": "186",
+      "store_code": "191",
       "ac_name": "Edison",
       "enabled": true
     },
