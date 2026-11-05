@@ -86,6 +86,7 @@
     else if(flat.some(r=>r.some(x=>clean(x)==='問卷 OSAT')&&r.some(x=>clean(x)==='# 回應數'))){type='GES';rows=parseGes(flat,file,stores);}
     else throw new Error('無法辨識檔案類型；請選 0800、4128 或 GES 格式。');
     if(rows.some(r=>(r.record_date||r.period_start)<(window.T996Config.feedbackHistoryStart||window.T996Config.activationDate)))throw new Error('新回饋分析自 '+(window.T996Config.feedbackHistoryStart||window.T996Config.activationDate)+' 啟用，未匯入較早資料。');
+    if(type!=='GES'){const ds=flat.map(row=>opsIsoDate(row[0])).filter(Boolean).sort();if(ds.length)for(const row of rows)Object.assign(row.raw_fields,{_coverage_start:ds[0],_coverage_end:ds.at(-1)});}
     const uniq=new Map(rows.map(r=>[r.source_type+'|'+r.source_key,r]));rows=[...uniq.values()];
     const start=rows.map(r=>r.record_date||r.period_start).filter(Boolean).sort()[0],end=rows.map(r=>r.record_date||r.period_end).filter(Boolean).sort().at(-1);
     return {file,type,rows,start,end,unmapped:rows.filter(r=>r.source_type==='4128'&&r.restaurant_name.startsWith('未配對店號')).length};
