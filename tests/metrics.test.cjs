@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict'),M=require('../operations-metrics'),S=require('../operations-summary'),C=require('../center-config');
+assert.equal(C.restaurants.length,43);assert.equal(new Set(C.restaurants.map(x=>x.store_code)).size,43);assert.deepEqual(C.independentStores,[]);assert.deepEqual(C.nonDeliveryStores,[]);assert.equal(M.NON_DELIVERY_STORES.size,0);
+const date='2026-11-01',batches=[{id:'o',report_date:date,report_type:'ByOrder'}];
+assert.equal(S.lineExport(C.restaurants,[],date,date,date).length,43,'all 996 restaurants deliver and remain in inspection export scope');
+const row=(store,order,d7,d25,mode='手動')=>({batch_id:'o',row_number:1,store_code:store,restaurant_name:C.restaurants.find(x=>x.store_code===store).restaurant_name,order_number:order,payload:{D7:d7,D25:d25,'自動/手動':mode}});
+const catalog=new Map(C.restaurants.map(x=>[x.store_code,x]));
+assert.equal(M.areaFor(row('025','1','Y','Y'),new Map(),catalog),'F');
+assert.equal(M.areaFor({payload:{AC:'TWI995-A'}},new Map(),catalog),'?');
+const args={rows:[row('040','same','Y','Y'),row('025','same','N','Y'),row('040','FA','','','第三方'),row('040','unknown','','')],batches,history:[],mapping:new Map(),catalog,reports:[],start:date,end:date};
+const v=M.build(args);assert.equal(v.summary.tc,4,'same order id at different stores is distinct');assert.equal(v.summary.fa,1);assert.equal(v.summary.d7,.5);assert.equal(v.summary.d25,1);assert.equal(v.summary.sstg,null);assert.equal(v.summary.actualHours,null);assert.equal(v.summary.tplh,null);
+assert.equal(M.GROWTH,.06);assert.equal(M.FORECAST_TPLH,2.5);assert.equal(M.number(''),null);assert.equal(M.number(0),0);assert.equal(M.ratio(0,0),null);
+assert.deepEqual(S.range('2026-11-01','week'),{start:'2026-10-26',end:'2026-11-01'});assert.deepEqual(S.range('2026-11-30','month'),{start:'2026-11-01',end:'2026-11-30'});
+const tie=S.delayRanking(['040','025','173','580'].map(store_code=>({store_code,restaurant_name:store_code,record_date:date})),date,date);assert.equal(tie.top.length,4,'retain ties at the third-place cutoff');
+console.log('PASS 996 catalog, F area, cross-store deduplication, valid denominators, missing values, date boundaries and ties');

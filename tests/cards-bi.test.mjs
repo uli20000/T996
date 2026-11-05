@@ -1,10 +1,11 @@
+const requireForecast=createRequire(import.meta.url)('../operations-forecast.js');
 import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url), M=require('../operations-metrics.js'),S=require('../operations-summary.js'),C=require('../center-config.js'),K=require('../operations-ranking.js');
 const source=fs.readFileSync('analysis-dashboard.js','utf8');
-const ctx={window:{OpsMetrics:M,OpsSummary:S,OpsRanking:K,T996Config:C,supabase:{createClient:()=>({})}},document:{getElementById:()=>({})},Intl,Date,Map,Set,console,XLSX:{utils:{sheet_to_json:s=>s}}};
+const ctx={window:{OpsForecast:requireForecast,OpsMetrics:M,OpsSummary:S,OpsRanking:K,T996Config:C,supabase:{createClient:()=>({})}},document:{getElementById:()=>({})},Intl,Date,Map,Set,console,XLSX:{utils:{sheet_to_json:s=>s}}};
 ctx.globalThis=ctx;
 vm.runInNewContext(source.slice(0,source.indexOf('  let preparedBi'))+'globalThis.subject={state,parseWeeklySales,isoWeekBounds,trackingStats,trackingOverview,trackingComparison,feedbackPage,feedbackCovered};})();',ctx);
 const T=ctx.subject;T.state.catalog=new Map(C.restaurants.map(x=>[x.store_code,x]));
@@ -24,7 +25,7 @@ T.state.period='week';T.state.metric='feedback';const gr={start:'2026-10-26',end
 const rendered=T.feedbackPage(gd,null,gr);assert.match(rendered,/GES 中心篩選彙總/);assert.doesNotMatch(rendered,/opsFeedbackFiles|opsFeedbackImport|opsFeedbackPreview/);assert.match(rendered,/Synthetic franchise/);assert.match(T.trackingOverview(gd,gr),/80.0%/);assert.equal(T.feedbackCovered({...empty,feedback:[{source_type:'0800',raw_fields:{_coverage_start:'2026-10-01',_coverage_end:'2026-10-31'}}]},'0800',gr).length,1);
 const excludedGes={...gd,reports:[{record_date:'2026-10-27',score_excluded:true}]};assert.doesNotMatch(T.trackingOverview(excludedGes,gr),/80.0%/);assert.match(T.feedbackPage(excludedGes,null,gr),/不列為排除後成績/);
 const nodes=new Map(),element=id=>{if(!nodes.has(id))nodes.set(id,{innerHTML:'',hidden:false,remove(){}});return nodes.get(id);};
-const reportContext={window:{OpsMetrics:M,OpsSummary:S,T996Config:C,OpsDateControl:{period:'week',date:'2026-10-26'}},document:{getElementById:element},opsEscape:x=>String(x??'').replaceAll('<','&lt;'),opsToday:()=> '2026-11-05',console,Map,Set,Date,Intl};
+const reportContext={window:{OpsForecast:requireForecast,OpsMetrics:M,OpsSummary:S,T996Config:C,OpsDateControl:{period:'week',date:'2026-10-26'}},document:{getElementById:element},opsEscape:x=>String(x??'').replaceAll('<','&lt;'),opsToday:()=> '2026-11-05',console,Map,Set,Date,Intl};
 reportContext.globalThis=reportContext;
 vm.runInNewContext(fs.readFileSync('operations-report.js','utf8').replace(/\}\)\(\);\s*$/,'globalThis.reportSubject={state,periodRecords,renderSummaryCounts,renderPriorityRestaurants};})();'),reportContext);
 const R=reportContext.reportSubject;R.state.context='summary';
