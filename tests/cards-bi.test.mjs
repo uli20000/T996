@@ -6,7 +6,7 @@ const require=createRequire(import.meta.url), M=require('../operations-metrics.j
 const source=fs.readFileSync('analysis-dashboard.js','utf8');
 const ctx={window:{OpsMetrics:M,OpsSummary:S,OpsRanking:K,T996Config:C,supabase:{createClient:()=>({})}},document:{getElementById:()=>({})},Intl,Date,Map,Set,console,XLSX:{utils:{sheet_to_json:s=>s}}};
 ctx.globalThis=ctx;
-vm.runInNewContext(source.slice(0,source.indexOf('  let preparedBi'))+'globalThis.subject={state,parseWeeklySales,isoWeekBounds,trackingStats,trackingOverview,trackingComparison};})();',ctx);
+vm.runInNewContext(source.slice(0,source.indexOf('  let preparedBi'))+'globalThis.subject={state,parseWeeklySales,isoWeekBounds,trackingStats,trackingOverview,trackingComparison,feedbackPage,feedbackCovered};})();',ctx);
 const T=ctx.subject;T.state.catalog=new Map(C.restaurants.map(x=>[x.store_code,x]));
 const book=center=>({SheetNames:['週'],Sheets:{週:[['STR_SN','Area','SSSG%_wk'],['','Total',0.1],['台中五權','A',0],[null,null,null,'CenterName 是 '+center],[null,null,null,'YEAR 是 2026'],[null,null,null,'YWEEK 是 44'],[null,null,null,'DATE 在 2026-10-26 當時或之後 及 在 2026-11-02 之前']]}});
 assert.match(T.parseWeeklySales(book('桃園外送中心'),{name:'wrong.xlsx'}).error,/台中/);
@@ -20,6 +20,8 @@ T.state.period='day';T.state.metric='d7';assert.match(T.trackingOverview(empty,{
 T.state.period='week';T.state.timeline=[-2,-1,0,1,2].map(offset=>({offset,range:S.range(M.addDays('2026-10-26',offset*7),'week'),data:offset<=0?empty:null}));
 assert.match(T.trackingComparison(),/五週/);assert.match(T.trackingComparison(),/尚未發生/);assert.doesNotMatch(T.trackingComparison(),/桃園|停班停課|苗栗範圍/);
 assert.equal(T.trackingStats(empty,{start:'2026-11-01',end:'2026-11-01'}).values.find(x=>x[0]==='去年TC')[1],null);
+T.state.period='week';T.state.metric='feedback';const gr={start:'2026-10-26',end:'2026-11-01'},gd={...empty,feedback:[{source_type:'GES',period_start:gr.start,period_end:gr.end,restaurant_name:'Synthetic franchise',store_code:null,response_count:162,osat_survey:.8}]};
+const rendered=T.feedbackPage(gd,null,gr);assert.match(rendered,/GES 中心篩選彙總/);assert.doesNotMatch(rendered,/opsFeedbackFiles|opsFeedbackImport|opsFeedbackPreview/);assert.match(rendered,/Synthetic franchise/);assert.match(T.trackingOverview(gd,gr),/80.0%/);assert.equal(T.feedbackCovered({...empty,feedback:[{source_type:'0800',raw_fields:{_coverage_start:'2026-10-01',_coverage_end:'2026-10-31'}}]},'0800',gr).length,1);
 const nodes=new Map(),element=id=>{if(!nodes.has(id))nodes.set(id,{innerHTML:'',hidden:false,remove(){}});return nodes.get(id);};
 const reportContext={window:{OpsMetrics:M,OpsSummary:S,T996Config:C,OpsDateControl:{period:'week',date:'2026-10-26'}},document:{getElementById:element},opsEscape:x=>String(x??'').replaceAll('<','&lt;'),opsToday:()=> '2026-11-05',console,Map,Set,Date,Intl};
 reportContext.globalThis=reportContext;
