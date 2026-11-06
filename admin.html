@@ -5277,22 +5277,31 @@ function t995RenderShiftWeekButtons(weeks){
     </div>`;
   }).join('');
 }
+let t996ShiftLoadVersion=0;
 async function t995LoadShiftAdmin(){
+  const loadVersion=++t996ShiftLoadVersion;
   const weeks=t995WeekChoices();const old=t995ShiftWeekSelect.value;const oldExport=document.getElementById("shiftExportWeekSelect")?.value;
   t995ShiftWeekSelect.innerHTML=weeks.map(w=>`<option value="${w.start}">${w.label}</option>`).join('');if(weeks.some(w=>w.start===old))t995ShiftWeekSelect.value=old;
   const exportSelect=document.getElementById("shiftExportWeekSelect");
   if(exportSelect){exportSelect.innerHTML=weeks.map(w=>`<option value="${w.start}">${w.dateLabel}</option>`).join('');exportSelect.value=weeks.some(w=>w.start===oldExport)?oldExport:t995ShiftWeekSelect.value;}
   t995ShiftAdminList.innerHTML='<div class="loading">載入中…</div>';t995ShiftSummary.textContent="";t995StaffingSummary.innerHTML="";t995StaffingWeekGap.hidden=true;t995StaffingForecastDataWarning.hidden=true;t995StaffingDayTabs.innerHTML="";t995StaffingList.innerHTML='<div class="loading">計算中…</div>';
   try{
-    // 初始化不存在的週次為關閉；ignoreDuplicates 保留既有勾選狀態。
-    const seed=await db.from("weekly_shift_open_weeks").upsert(weeks.map(w=>({week_start:w.start,is_open:false})),{onConflict:"week_start",ignoreDuplicates:true});
-    if(seed.error)throw seed.error;
+    // Reading a week never changes its open/closed state. Missing settings mean closed.
+    const gate=await db.rpc("employee_shift_gate_status");
+    if(loadVersion!==t996ShiftLoadVersion)return;
+    if(gate.error)throw gate.error;
+    if(!gate.data?.unlocked){
+      t995ShiftRows=[];t995ShiftAdminList.innerHTML='<div class="empty">管理區域驗證已逾時，請重新驗證。</div>';
+      t995StaffingList.innerHTML='<div class="empty">重新驗證後即可讀取此週人力預估。</div>';
+      t995OpenPasswordDialog(gate.data?.configured?'unlock':'setup',"shift");return;
+    }
     const [er,sr,settings,openWeeks]=await Promise.all([
       db.from("employee_directory").select("id,full_name,area_code,is_active").eq("is_active",true).order("area_code",{ascending:true}).order("full_name",{ascending:true}),
       db.from("weekly_shift_availability").select("id,employee_id,employee_name,employee_area_code,week_start,monday,tuesday,wednesday,thursday,friday,saturday,sunday,notes,submitted_at,is_test").eq("week_start",t995ShiftWeekSelect.value).order("submitted_at",{ascending:false}),
       db.from("staffing_settings").select("target_tplh,max_third_party_usage_pct,forecast_weeks,shift_test_mode").eq("singleton",true).maybeSingle(),
       db.from("weekly_shift_open_weeks").select("week_start,is_open").in("week_start",weeks.map(w=>w.start))
     ]);
+    if(loadVersion!==t996ShiftLoadVersion)return;
     if(er.error)throw er.error;if(sr.error)throw sr.error;if(settings.error)throw settings.error;if(openWeeks.error)throw openWeeks.error;
     t995Employees=er.data||[];if(settings.data)t995StaffingSettings=settings.data;
     t995ShiftOpenWeeks=new Set((openWeeks.data||[]).filter(row=>row.is_open).map(row=>row.week_start));
@@ -5301,8 +5310,8 @@ async function t995LoadShiftAdmin(){
     t995ShiftRows=t995Employees.map(e=>({employee:e,shift:latest.get(String(e.id))||null}));
     const forecastRows=t995Employees.map(e=>({employee:e,shift:latest.get(String(e.id))||null}));
     const testToggle=document.getElementById("shiftTestModeToggle");if(testToggle){testToggle.checked=Boolean(t995StaffingSettings.shift_test_mode);t995SyncShiftToggleVisual(testToggle);}
-    t995RenderShiftAdmin();await t995RenderStaffingRecommendation(t995ShiftWeekSelect.value,forecastRows);
-  }catch(e){t995ShiftRows=[];t995ShiftAdminList.innerHTML=`<div class="empty">讀取失敗：${esc(e.message||"請確認權限")}</div>`;t995StaffingSummary.innerHTML="";t995StaffingWeekGap.hidden=true;t995StaffingForecastDataWarning.hidden=true;t995StaffingDayTabs.innerHTML="";t995StaffingList.innerHTML='<div class="empty">人力資料讀取失敗</div>';}
+    t995RenderShiftAdmin();await t995RenderStaffingRecommendation(t995ShiftWeekSelect.value,forecastRows,loadVersion);
+  }catch(e){if(loadVersion!==t996ShiftLoadVersion)return;t995ShiftRows=[];t995ShiftAdminList.innerHTML=`<div class="empty">讀取失敗：${esc(e.message||"請確認權限")}</div>`;t995StaffingSummary.innerHTML="";t995StaffingWeekGap.hidden=true;t995StaffingForecastDataWarning.hidden=true;t995StaffingDayTabs.innerHTML="";t995StaffingList.innerHTML='<div class="empty">人力資料讀取失敗</div>';}
 }
 async function t995SetShiftWeekOpen(input){
   if(!input)return;
@@ -5407,10 +5416,11 @@ async function t995LoadAllPaged(table,select,fromDate,toDate,periodCode,orderCol
   }return out;
 }
 function t995MapAdd(map,key,value){map.set(key,(map.get(key)||0)+Number(value||0));}
-async function t995RenderStaffingRecommendation(weekStart,shiftRows){
+async function t995RenderStaffingRecommendation(weekStart,shiftRows,loadVersion){
   if(!t995AreaMapLoaded)await t995LoadAreaMap();
   const F=window.OpsForecast;
   const powerbiData=await F.load(db,weekStart,t995DateAdd(weekStart,6));
+  if(loadVersion!==undefined&&loadVersion!==t996ShiftLoadVersion)return;
   const prepared=F.prepare({...powerbiData,catalog:new Map(window.T996Config.restaurants.map(s=>[s.store_code,s]))});
   const dayNames=['週一','週二','週三','週四','週五','週六','週日'];
   const dayForecasts=dayNames.map((day,offset)=>prepared.forecast(t995DateAdd(weekStart,offset)));
