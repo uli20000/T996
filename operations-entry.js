@@ -1,13 +1,15 @@
 (function(){
   'use strict';
   const E=id=>document.getElementById(id),S=window.OpsSummary,R=window.OpsReport,escape=opsEscape;
-  const dateControl=window.OpsDateControl={date:window.T996PreviewDate||opsToday(),period:'day',set(date,period=this.period,refresh=true){this.date=date||opsToday();this.period=period;paintToolbar();if(state.active==='line'&&E('opsLineStore').value)R.fillLineState(E('opsLineStore').value,this.date);if(refresh)refreshActive();}};
+  const sharedDate={key:'t996-shared-date-v1',get(){try{const x=JSON.parse(localStorage.getItem(this.key)||'null');if(x&&/^\d{4}-\d{2}-\d{2}$/.test(x.date)&&['day','week','month'].includes(x.period)&&Date.now()-x.at<43200000)return x;}catch(e){}return null;},set(date,period){try{localStorage.setItem(this.key,JSON.stringify({date,period,at:Date.now()}));}catch(e){}}};
+  const sharedStart=sharedDate.get();
+  const dateControl=window.OpsDateControl={date:sharedStart?.date||opsToday(),period:sharedStart?.period||'day',set(date,period=this.period,refresh=true){this.date=date||opsToday();this.period=period;sharedDate.set(this.date,this.period);paintToolbar();if(state.active==='line'&&E('opsLineStore').value)R.fillLineState(E('opsLineStore').value,this.date);if(refresh)refreshActive();}};
   const state={delay:[],line:[],stores:[],delayRequest:0,lineRequest:0,active:'delay',lineFilter:'all',choicesOpen:false};
   const periodRange=()=>S.range(dateControl.date,dateControl.period);
   const periodLabel=()=>{const r=periodRange(),p=dateControl.period;return p==='day'?r.start:p==='week'?S.weekLabel(r.start)+'　'+r.start+' ～ '+r.end:r.start.slice(0,7);};
   const shiftDate=(date,days)=>{const d=new Date(date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);};
   const shiftMonth=(date,months)=>{const d=new Date(date+'T12:00:00Z');d.setUTCDate(1);d.setUTCMonth(d.getUTCMonth()+months);return d.toISOString().slice(0,10);};
-  const dateText=date=>{const d=new Date(date+'T12:00:00Z'),weekday=['日','一','二','三','四','五','六'][d.getUTCDay()];return date.slice(5).replace('-','/')+'（'+weekday+'）';};
+  const dateText=date=>{const d=new Date(date+'T12:00:00Z'),weekday=['日','一','二','三','四','五','六'][d.getUTCDay()];return '星期'+weekday;};
   const monthText=date=>new Intl.DateTimeFormat('zh-TW',{timeZone:'UTC',year:'numeric',month:'long'}).format(new Date(date+'T12:00:00Z'));
   function renderPeriodChoices(){
     const box=E('opsGlobalPeriodChoices'),period=dateControl.period;
@@ -41,18 +43,45 @@
   }
   async function loadDelay(){
     const request=++state.delayRequest,r=periodRange();E('opsDelayList').innerHTML='<div class="ops-empty">讀取中…</div>';
-    try{const rows=await R.readRows('t996_delay_orders','*',q=>q.gte('record_date',r.start).lte('record_date',r.end));if(request!==state.delayRequest)return;state.delay=rows.sort((a,b)=>b.record_date.localeCompare(a.record_date)||b.created_at.localeCompare(a.created_at));renderDelay();}catch(e){if(request===state.delayRequest){state.delay=[];E('opsDelayList').textContent='讀取失敗：'+e.message;}}
+    try{const rows=await R.readRows('t996_delay_orders','*',q=>q.gte('record_date',r.start).lte('record_date',r.end));if(request!==state.delayRequest)return;state.delay=window.OpsMetrics.scopeData({delay:rows}).delay.sort((a,b)=>b.record_date.localeCompare(a.record_date)||b.created_at.localeCompare(a.created_at));renderDelay();}catch(e){if(request===state.delayRequest){state.delay=[];E('opsDelayList').textContent='讀取失敗：'+e.message;}}
   }
   function renderDelay(){
     const search=E('opsDelaySearch').value.trim().toLowerCase(),rows=state.delay.filter(x=>!search||[x.store_code,x.restaurant_name].some(v=>String(v).toLowerCase().includes(search)));
     E('opsDelayListTitle').textContent='等餐紀錄　'+periodLabel();
-    E('opsDelayList').innerHTML=rows.length?'<table class="ops-table ops-records-table"><thead><tr><th>日期</th><th>店號／餐廳</th><th>編號</th><th>狀態</th><th>等餐原因</th><th>操作</th></tr></thead><tbody>'+rows.map(x=>'<tr><td data-label="日期">'+x.record_date+'</td><td data-label="店號／餐廳">'+escape(x.store_code)+'／'+escape(x.restaurant_name)+'</td><td data-label="編號">'+escape(x.order_number)+'</td><td data-label="狀態">'+(x.status==='completed'?'已回覆':'待回覆')+'</td><td data-label="等餐原因">'+escape(x.reason||'—')+'</td><td data-label="操作"><button type="button" class="ops-delete-btn" data-delete-delay="'+x.id+'" aria-label="刪除 '+escape(x.restaurant_name)+' 訂單 '+escape(x.order_number)+'">刪除</button></td></tr>').join('')+'</tbody></table>':'<div class="ops-empty">沒有符合條件的紀錄</div>';
+    E('opsDelayList').innerHTML=rows.length?'<table class="ops-table ops-records-table"><thead><tr><th>日期</th><th>店號／餐廳</th><th>編號</th><th>狀態</th><th>等餐原因</th><th>操作</th></tr></thead><tbody>'+rows.map(x=>'<tr><td data-label="日期">'+x.record_date+'</td><td data-label="店號／餐廳">'+escape(x.store_code)+'／'+escape(x.restaurant_name)+'</td><td data-label="編號">'+escape(x.order_number)+'</td><td data-label="狀態">'+(x.status==='completed'?'已回覆':'待回覆')+'</td><td data-label="等餐原因">'+escape(x.reason||'—')+'</td><td data-label="操作"><button type="button" class="ops-delete-btn" data-delete-delay="'+x.id+'" aria-label="刪除 '+escape(x.restaurant_name)+' 訂單 '+escape(x.order_number)+'">刪除</button>'+replyReturnButton(x)+'</td></tr>').join('')+'</tbody></table>':'<div class="ops-empty">沒有符合條件的紀錄</div>';
+  }
+  function replyReturnEnabled(){
+    const features=window.CENTER_CONFIG?.features;
+    return features?.adminReturnReplies===true&&features?.monthReplyGatewayReady===true;
+  }
+  function replyReturnButton(row){
+    if(row.status!=='completed')return '';
+    return '<button type="button" class="action-btn" data-return-delay="'+escape(row.id)+'" '+(replyReturnEnabled()?'':'disabled title="回覆修訂與月份連結入口尚未驗收，暫不開放"')+'>退回修改</button>';
+  }
+  const returningReplies=new Set();
+  async function returnDelayReply(id,button){
+    const message=E('opsDelayMessage');
+    if(!replyReturnEnabled()){message.textContent='回覆修訂與月份連結入口尚未驗收，沒有變更資料。';return;}
+    const row=state.delay.find(x=>String(x.id)===String(id));
+    if(!row||row.status!=='completed'||!row.responded_at){message.textContent='回覆狀態已變更，請重新載入確認。';return;}
+    if(returningReplies.has(id))return;
+    const reason=prompt('請填寫退回原因（原回覆會保留歷史版本）：');
+    if(reason===null)return;
+    if(!reason.trim()||reason.trim().length>500){message.textContent='退回原因需填寫1至500字。';return;}
+    if(!confirm('將 '+row.record_date+' '+row.restaurant_name+' 訂單 '+row.order_number+' 退回修改？原回覆將保留，餐廳可使用原月份有效連結重填。'))return;
+    returningReplies.add(id);button.disabled=true;message.textContent='退回中…';
+    try{
+      const result=await db.rpc('return_delay_reply',{p_order_id:row.id,p_expected_responded_at:row.responded_at,p_return_reason:reason.trim()});
+      if(result.error)throw result.error;
+      if(result.data?.id!==row.id||result.data?.status!=='pending'||!Number.isInteger(result.data?.archived_revision))throw new Error('回傳結果不完整，請重新載入核對');
+      message.textContent='已退回，原回覆已保存為第 '+result.data.archived_revision+' 版。';
+    }catch(error){message.textContent='未確認退回完成：'+error.message+'；未重試或直接覆寫，請重新載入核對。';}
+    finally{returningReplies.delete(id);await loadDelay();}
   }
   async function loadLine(){
-    if(window.T996Config.nonDeliveryStores===null){for(const id of ['opsLineStats','opsLineList'])E(id).innerHTML='<div class="ops-config-pending">未做外送名單待確認，暫不計算巡檢範圍與達成率。</div>';return;}
     const request=++state.lineRequest;E('opsLineList').innerHTML='<div class="ops-empty">讀取中…</div>';
     const r=periodRange();
-    try{const [rows,stores]=await Promise.all([R.readRows('t996_line_signature_records','id,record_date,store_code,restaurant_name,line_completed,signature_completed',q=>q.gte('record_date',r.start).lte('record_date',r.end)),R.directory()]);if(request!==state.lineRequest)return;state.line=rows;state.stores=stores;renderLine();}catch(e){if(request===state.lineRequest){state.line=[];E('opsLineList').textContent='讀取失敗：'+e.message;}}
+    try{const [rows,stores]=await Promise.all([R.readRows('t996_line_signature_records','id,record_date,store_code,restaurant_name,line_completed,signature_completed',q=>q.gte('record_date',r.start).lte('record_date',r.end)),R.directory()]);if(request!==state.lineRequest)return;state.line=window.OpsMetrics.scopeData({line:rows}).line.filter(x=>!window.OpsMetrics.NON_DELIVERY_STORES.has(String(x.store_code)));state.stores=stores.filter(x=>window.OpsMetrics.storeInScope(x.store_code,r.start,x.restaurant_name));renderLine();}catch(e){if(request===state.lineRequest){state.line=[];E('opsLineList').textContent='讀取失敗：'+e.message;}}
   }
   function renderLine(){
     const search=E('opsLineSearch').value.trim().toLocaleLowerCase('zh-Hant'),nonDelivery=window.OpsMetrics.NON_DELIVERY_STORES;
@@ -75,21 +104,20 @@
       message.textContent='已刪除';if(kind==='delay')await loadDelay();else{await loadLine();if(E('opsLineStore').value===row.store_code)await R.fillLineState(row.store_code);}
     }catch(e){message.textContent='刪除失敗：'+e.message;button.disabled=false;}
   }
-  E('opsDelayList').onclick=e=>{const b=e.target.closest('[data-delete-delay]');if(b)removeRecord('delay',b.dataset.deleteDelay,b);};
+  E('opsDelayList').onclick=e=>{const returned=e.target.closest('[data-return-delay]');if(returned){returnDelayReply(returned.dataset.returnDelay,returned);return;}const b=e.target.closest('[data-delete-delay]');if(b)removeRecord('delay',b.dataset.deleteDelay,b);};
   E('opsLineList').onclick=e=>{const b=e.target.closest('[data-delete-line]');if(b)removeRecord('line',b.dataset.deleteLine,b);};
   E('opsDelaySave').onclick=async()=>{
-    const date=opsToday(),order=E('opsDelayOrder').value.trim(),msg=E('opsDelayMessage');if(!/^[0-9]{4}$/.test(order)){msg.textContent='請輸入 4 碼訂單編號';return;}
+    const date=dateControl.date,order=E('opsDelayOrder').value.trim(),msg=E('opsDelayMessage');if(!/^[0-9]{4}$/.test(order)){msg.textContent='請輸入 4 碼訂單編號';return;}
     E('opsDelaySave').disabled=true;msg.textContent='儲存中…';
-    try{const restaurant=await window.opsFindRestaurant('opsDelayStore');if(!restaurant)throw new Error('請選擇正確的店號');const result=await db.from('t996_delay_orders').insert({record_date:date,store_code:restaurant.store_code,restaurant_name:restaurant.restaurant_name,order_number:order,status:'pending'});if(result.error)throw result.error;dateControl.set(date,dateControl.period,false);
+    try{const restaurant=await window.opsFindRestaurant('opsDelayStore');if(!restaurant)throw new Error('請選擇正確的店號');const result=await db.from('t996_delay_orders').insert({record_date:date,store_code:restaurant.store_code,restaurant_name:restaurant.restaurant_name,order_number:order,status:'pending'});if(result.error)throw result.error;
       E('opsDelayOrder').value='';E('opsDelaySearch').value='';await loadDelay();msg.textContent='已新增';E('opsDelayOrder').focus();
     }catch(e){msg.textContent=e.code==='23505'?'同日、同餐廳的訂單編號已存在':'新增失敗：'+e.message;}finally{E('opsDelaySave').disabled=false;}
   };
   for(const id of ['opsLineMark','opsSignMark'])E(id).onclick=()=>opsSetToggle(id,E(id).getAttribute('aria-pressed')!=='true');
   E('opsLineSave').onclick=async()=>{
-    const date=opsToday(),msg=E('opsLineMessage'),marked=E('opsLineMark').getAttribute('aria-pressed')==='true',signed=E('opsSignMark').getAttribute('aria-pressed')==='true';
-    if(window.T996Config.nonDeliveryStores===null){msg.textContent='未做外送名單待確認，暫不開放巡檢登記。';return;}
+    const date=dateControl.date,msg=E('opsLineMessage'),marked=E('opsLineMark').getAttribute('aria-pressed')==='true',signed=E('opsSignMark').getAttribute('aria-pressed')==='true';
     E('opsLineSave').disabled=true;msg.textContent='儲存中…';
-    try{const restaurant=await window.opsFindRestaurant('opsLineStore');if(!restaurant)throw new Error('請選擇正確的店號');const result=await db.from('t996_line_signature_records').upsert({record_date:date,store_code:restaurant.store_code,restaurant_name:restaurant.restaurant_name,status:marked&&signed?'completed':'not_completed',line_completed:marked,signature_completed:signed,updated_at:new Date().toISOString()},{onConflict:'record_date,store_code'});if(result.error)throw result.error;dateControl.set(date,dateControl.period,false);await loadLine();msg.textContent='已新增';}catch(e){msg.textContent='新增失敗：'+e.message;}finally{E('opsLineSave').disabled=false;}
+    try{const restaurant=await window.opsFindRestaurant('opsLineStore');if(!restaurant)throw new Error('請選擇正確的店號');const result=await db.from('t996_line_signature_records').upsert({record_date:date,store_code:restaurant.store_code,restaurant_name:restaurant.restaurant_name,status:marked&&signed?'completed':'not_completed',line_completed:marked,signature_completed:signed,updated_at:new Date().toISOString()},{onConflict:'record_date,store_code'});if(result.error)throw result.error;await loadLine();msg.textContent='已新增';}catch(e){msg.textContent='新增失敗：'+e.message;}finally{E('opsLineSave').disabled=false;}
   };
   paintToolbar();
   E('opsGlobalDate').onchange=()=>dateControl.set(E('opsGlobalDate').value||opsToday());
@@ -99,28 +127,36 @@
   E('opsGlobalRefresh').onclick=()=>refreshActive(true);
   E('opsDelaySearch').oninput=renderDelay;E('opsLineSearch').oninput=renderLine;
   E('opsLineStats').onclick=e=>{const b=e.target.closest('[data-line-filter]');if(!b)return;state.lineFilter=state.lineFilter===b.dataset.lineFilter?'all':b.dataset.lineFilter;renderLine();};
+  function monthReplyGatewayLink(){const c=window.CENTER_CONFIG;return (c?.schema==='shared_test_995'||(c?.environment==='production'&&c?.schema==='public'))&&c?.features?.monthReplyGatewayReady===true;}
+  // 新版月回覆未啟用的正式中心（996／998）沿用舊制發連結函式（打包時 t996_ 換成該中心前綴）
+  function monthReplyLegacyLink(){const c=window.CENTER_CONFIG;return c?.environment==='production'&&c?.schema==='public'&&c?.features?.monthReplyGatewayReady!==true;}
+  function monthReplyLinkEnabled(){return monthReplyGatewayLink()||monthReplyLegacyLink();}
   const linkMonth=E('opsLinkMonth');
   const monthLabel=value=>value.slice(0,4)+'年'+value.slice(5)+'月';
   linkMonth.value=opsToday().slice(0,7);
   function clearMonthLink(){
     E('opsLinkResult').hidden=true;E('opsLinkUrl').value='';E('opsLinkMonthLabel').textContent='';
+    E('opsLinkCreate').disabled=!monthReplyLinkEnabled();
+    if(!monthReplyLinkEnabled())E('opsLinkMessage').textContent='隔離月回覆入口尚未啟用，沒有建立連結。';
     E('opsLinkMonthPreview').textContent=/^\d{4}-(0[1-9]|1[0-2])$/.test(linkMonth.value)?'將建立 '+monthLabel(linkMonth.value)+' 的固定月份連結':'請選擇回覆月份';
   }
-  linkMonth.onchange=()=>{clearMonthLink();E('opsLinkMessage').textContent='';};
+  linkMonth.onchange=()=>{E('opsLinkMessage').textContent='';clearMonthLink();};
   clearMonthLink();
   E('opsLinkCreate').onclick=async()=>{
     const msg=E('opsLinkMessage'),month=linkMonth.value,button=E('opsLinkCreate');
+    if(!monthReplyLinkEnabled()){msg.textContent='隔離月回覆入口尚未啟用，沒有建立連結。';return;}
+    if(button.disabled)return;
     if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)){msg.textContent='請選擇有效的回覆月份';return;}
-    if(!confirm('建立 '+monthLabel(month)+' 的固定月份連結？同月重新產生會撤銷該月前一個新制連結；其他月份及既有舊連結不受影響。'))return;
-    button.disabled=true;linkMonth.disabled=true;clearMonthLink();msg.textContent='正在建立 '+monthLabel(month)+' 連結…';
+    if(!confirm('建立 '+monthLabel(month)+' 的固定月份連結？同月重新產生會撤銷該月前一個連結；連結沒有固定到期日，其他月份不受影響。'))return;
+    clearMonthLink();button.disabled=true;linkMonth.disabled=true;msg.textContent='正在建立 '+monthLabel(month)+' 連結…';
     try{
-      const r=await db.rpc('t996_issue_month_reply_link',{p_month:month+'-01'});if(r.error)throw r.error;
+      const r=await db.rpc(monthReplyGatewayLink()?'issue_month_reply_link':'t996_issue_month_reply_link',{p_month:month+'-01'});if(r.error)throw r.error;
       if(r.data?.month!==month||!/^[0-9a-f]{64}$/.test(r.data?.token||''))throw new Error('月份連結回應不完整，請重新確認');
       const url=new URL('reply.html',location.href);url.searchParams.set('kind','month');url.searchParams.set('token',r.data.token);
       E('opsLinkUrl').value=url.href;E('opsLinkMonthLabel').textContent='固定回覆月份：'+monthLabel(month);E('opsLinkResult').hidden=false;
       msg.textContent=monthLabel(month)+' 連結已建立，沒有固定到期日；跨月仍只顯示此月份。';
-    }catch(e){msg.textContent='產生失敗：'+(e.message||'請檢查管理員權限及月份連結功能是否已部署');}
-    finally{button.disabled=false;linkMonth.disabled=false;}
+    }catch(e){msg.textContent='未確認連結建立結果；重新產生會撤銷同月前一連結：'+(e.message||'請檢查管理員權限及月份連結功能是否已部署');}
+    finally{button.disabled=!monthReplyLinkEnabled();linkMonth.disabled=false;}
   };
   E('opsLinkCopy').onclick=async()=>{if(!E('opsLinkUrl').value||E('opsLinkResult').hidden)return;try{await navigator.clipboard.writeText(E('opsLinkUrl').value);E('opsLinkMessage').textContent='已複製'+E('opsLinkMonthLabel').textContent+'的連結';}catch{E('opsLinkUrl').select();document.execCommand('copy');E('opsLinkMessage').textContent='已複製'+E('opsLinkMonthLabel').textContent+'的連結';}};
   function openTab(name){
@@ -132,3 +168,4 @@
   const original=showAdminMode;showAdminMode=function(mode){original(mode);E('opsModePage').style.display=mode==='ops'?'block':'none';if(mode==='ops')openTab(state.active);};
   E('opsModeBtn').onclick=()=>showAdminMode('ops');E('opsBackBtn').onclick=()=>showAdminMode('home');
 })();
+

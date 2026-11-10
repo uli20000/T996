@@ -1,6 +1,10 @@
 (function(){
   'use strict';
   const $=id=>document.getElementById(id),db=window.t996SupabaseClient;
+  const B=window.OpsMetrics?.BUSINESS||window.CenterBusinessConfig||{};
+  const REGION=B.regionLabel||'',CENTER_LABEL=REGION+'外送中心',AREA_NAMES=new Set(B.feedback0800AreaNames||[]);
+  const OWN_RESTAURANTS=new Set((B.restaurants||[]).map(r=>String(r.restaurant_name??'').normalize('NFKC').replace(/\s+/g,' ').trim()));
+  const isCenterRow=name=>!!REGION&&name.includes(REGION)&&name.includes('外送中心');
   if(!db)return;
   const prepared=[];let cachedStores;const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const clean=v=>String(v??'').normalize('NFKC').replace(/\s+/g,' ').trim();
@@ -18,7 +22,7 @@
   function keyParts(parts){return parts.map(x=>clean(x).slice(0,500)).join('|');}
   async function stableHash(parts){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(parts.map(x=>clean(x)).join('|')));return [...new Uint8Array(bytes)].map(x=>x.toString(16).padStart(2,'0')).join('');}
   function restaurantDirectoryMap(rows){return {byName:new Map(rows.map(x=>[clean(x.restaurant_name),x])),byCode:new Map(rows.map(x=>[String(x.store_code),x]))};}
-  async function restaurantDirectory(){if(cachedStores)return cachedStores;cachedStores=restaurantDirectoryMap(window.T996Config.restaurants);return cachedStores;}
+  async function restaurantDirectory(){if(cachedStores)return cachedStores;const {data,error}=await db.from('t996_restaurants').select('store_code,restaurant_name').eq('enabled',true);if(error)throw error;cachedStores=restaurantDirectoryMap(data||[]);return cachedStores;}
   function rowRecord(type,sourceKey,file,fields){return {source_type:type,source_key:String(sourceKey),source_file:file.name.slice(0,255),...fields,raw_fields:fields.raw_fields||{},imported_at:new Date().toISOString()};}
   async function parse0800(matrix,file){
     const headerRow=matrix.findIndex(row=>row.some(x=>clean(x)==='日期')&&row.some(x=>clean(x)==='建議種類')&&row.some(x=>clean(x)==='被抱怨型態'));
@@ -29,13 +33,13 @@
     for(const [offset,cells] of nonempty(matrix.slice(headerRow+1)).entries()){
       const get=k=>ix[k]>=0?cells[ix[k]]:'';
       const kind=clean(get('kind')),complaintType=clean(get('type')),area=clean(get('area')),restaurant=clean(get('restaurant'));
-      if(kind!=='抱怨'||!['網路外送','外送'].includes(complaintType)||!(window.T996Config.restaurants.some(x=>clean(x.restaurant_name)===restaurant)||(restaurant.includes('台中')&&restaurant.includes('外送中心'))))continue;
+      if(kind!=='抱怨'||!['網路外送','外送'].includes(complaintType)||!(AREA_NAMES.has(area)||isCenterRow(restaurant)||OWN_RESTAURANTS.has(restaurant)))continue;
       const recordDate=opsIsoDate(get('date'));if(!recordDate)continue;
-      const matched=window.T996Config.restaurants.find(x=>clean(x.restaurant_name)===restaurant);const row={record_date:recordDate,store_code:matched?.store_code||null,area_name:area,restaurant_name:restaurant,source_channel:clean(get('channel')),feedback_kind:kind,complaint_type:complaintType,main_topic:clean(get('topic')),item_1:clean(get('item1')),item_2:clean(get('item2')),content:String(get('content')??'').trim(),invoice_number:clean(get('invoice')),work_order:clean(get('work')),followup_status:clean(get('follow')),raw_fields:Object.fromEntries(headers.map((h,i)=>[h||`欄位${i+1}`,cells[i] instanceof Date?opsIsoDate(cells[i]):cells[i]??'']))};
+      const row={record_date:recordDate,area_name:area,restaurant_name:restaurant,source_channel:clean(get('channel')),feedback_kind:kind,complaint_type:complaintType,main_topic:clean(get('topic')),item_1:clean(get('item1')),item_2:clean(get('item2')),content:String(get('content')??'').trim(),invoice_number:clean(get('invoice')),work_order:clean(get('work')),followup_status:clean(get('follow')),raw_fields:Object.fromEntries(headers.map((h,i)=>[h||`欄位${i+1}`,cells[i] instanceof Date?opsIsoDate(cells[i]):cells[i]??'']))};
       const caseKey=row.work_order?`work:${row.work_order}:${row.main_topic}:${row.item_1}:${row.item_2}`:`hash:${await stableHash([recordDate,row.invoice_number,restaurant,row.main_topic,row.item_1,row.item_2,row.content])}`;
-      row.source_row=matrix.indexOf(cells)+1;out.push(rowRecord('0800',caseKey,file,row));
+      out.push(rowRecord('0800',caseKey,file,row));
     }
-    if(!out.length)throw new Error('此 0800 檔沒有符合條件的資料：抱怨＋外送＋996已確認餐廳或台中外送中心。');
+    if(!out.length)throw new Error('此 0800 檔沒有符合條件的資料：抱怨＋外送＋'+[...AREA_NAMES,CENTER_LABEL].join('或')+(OWN_RESTAURANTS.size?'或本中心餐廳':'')+'。');
     return out;
   }
   async function parse4128(matrix,file,stores){
@@ -45,14 +49,14 @@
     const out=[];
     for(const cells of nonempty(matrix.slice(headerRow+1))){
       const get=k=>ix[k]>=0?cells[ix[k]]:'';
-      const sourceRestaurant=clean(get('restaurant'));if(!(sourceRestaurant.includes('台中')&&sourceRestaurant.includes('外送中心')))continue;
+      const sourceRestaurant=clean(get('restaurant'));if(!isCenterRow(sourceRestaurant))continue;
       const recordDate=opsIsoDate(get('date')),orderNumber=clean(get('order')),storeCode=(orderNumber.match(/^(\d{3})/)||[])[1]||'';
-      if(!recordDate||!storeCode)continue;if(storeCode!=='000'&&!stores.byCode.has(storeCode))throw new Error('4128 出現非996店號 '+storeCode+'，請核對來源。');
+      if(!recordDate||!storeCode)continue;
       const store=stores.byCode.get(storeCode),restaurantName=store?.restaurant_name||`未配對店號 ${storeCode}`;
-      const row={record_date:recordDate,area_name:clean(get('area'))||'外送中心',store_code:store?.store_code||null,restaurant_name:restaurantName,source_channel:clean(get('channel')),feedback_kind:clean(get('kind')),complaint_type:clean(get('type')),content:String(get('content')??'').trim(),order_number:orderNumber,work_order:clean(get('work')),followup_status:clean(get('follow')),raw_fields:Object.fromEntries(headers.map((h,i)=>[h||`欄位${i+1}`,cells[i] instanceof Date?opsIsoDate(cells[i]):cells[i]??'']))};
-      row.source_row=matrix.indexOf(cells)+1;out.push(rowRecord('4128',keyParts([recordDate,orderNumber,row.work_order]),file,row));
+      const row={record_date:recordDate,area_name:clean(get('area'))||'外送中心',store_code:storeCode,restaurant_name:restaurantName,source_channel:clean(get('channel')),feedback_kind:clean(get('kind')),complaint_type:clean(get('type')),content:String(get('content')??'').trim(),order_number:orderNumber,work_order:clean(get('work')),followup_status:clean(get('follow')),raw_fields:Object.fromEntries(headers.map((h,i)=>[h||`欄位${i+1}`,cells[i] instanceof Date?opsIsoDate(cells[i]):cells[i]??'']))};
+      out.push(rowRecord('4128',keyParts([recordDate,orderNumber,row.work_order]),file,row));
     }
-    if(!out.length)throw new Error('此 4128 檔沒有台中外送中心且可辨識前三碼店號的資料。');
+    if(!out.length)throw new Error('此 4128 檔沒有'+CENTER_LABEL+'且可辨識前三碼店號的資料。');
     return out;
   }
   function parseGes(matrix,file,stores){
@@ -61,16 +65,14 @@
     const dateMatch=filterText.match(/日期範圍\s*:\s*(20\d{2})年(\d{1,2})月(\d{1,2})日?\s*至\s*(20\d{2})年(\d{1,2})月(\d{1,2})日?/);
     if(!dateMatch)throw new Error('GES 檔找不到日期範圍；請使用含「日期範圍」的匯出檔。');
     const start=`${dateMatch[1]}-${String(dateMatch[2]).padStart(2,'0')}-${String(dateMatch[3]).padStart(2,'0')}`,end=`${dateMatch[4]}-${String(dateMatch[5]).padStart(2,'0')}-${String(dateMatch[6]).padStart(2,'0')}`;
-    const centerScope=matrix.some(row=>row.includes('Franchisee_Name'));
-    if(centerScope){const ids=(filterText.match(/CHAMPS ID\s*:\s*(.*?)(?=訂購通路\s*:)/)||[])[1]||'';const codes=new Set([...ids.matchAll(/886KTW[IB](\d{3})/g)].map(x=>x[1]));if(codes.size!==stores.byCode.size||[...stores.byCode.keys()].some(code=>!codes.has(code)))throw new Error('GES 中心彙總須含996完整店號篩選。');}
-    const headerRow=matrix.findIndex(row=>row.some(x=>['餐廳','Franchisee_Name'].includes(clean(x)))&&row.some(x=>clean(x)==='# 回應數')&&row.some(x=>clean(x)==='問卷 OSAT'));
+    const headerRow=matrix.findIndex(row=>row.some(x=>clean(x)==='餐廳')&&row.some(x=>clean(x)==='# 回應數')&&row.some(x=>clean(x)==='問卷 OSAT'));
     if(headerRow<0)throw new Error('找不到 GES 餐廳／回應數／問卷 OSAT 欄位。');
-    const headers=matrix[headerRow].map(clean),ix={restaurant:indexOf(headers,'餐廳','Franchisee_Name'),count:indexOf(headers,'# 回應數'),one:indexOf(headers,'1SAT'),survey:indexOf(headers,'問卷 OSAT'),google:indexOf(headers,'Google OSAT'),delivery:indexOf(headers,'外送平台 OSAT'),accuracy:indexOf(headers,'餐點正確性','餐點正確性OSAT','餐點正確性 OSAT'),environment:indexOf(headers,'整體餐廳環境','整體餐廳環境OSAT','整體餐廳環境 OSAT'),service:indexOf(headers,'服務','服務OSAT','服務 OSAT'),speed:indexOf(headers,'服務速度','服務速度OSAT','服務速度 OSAT'),food:indexOf(headers,'餐點好吃度','餐點好吃度OSAT','餐點好吃度 OSAT')};
+    const headers=matrix[headerRow].map(clean),ix={restaurant:indexOf(headers,'餐廳'),count:indexOf(headers,'# 回應數'),one:indexOf(headers,'1SAT'),survey:indexOf(headers,'問卷 OSAT'),google:indexOf(headers,'Google OSAT'),delivery:indexOf(headers,'外送平台 OSAT'),accuracy:indexOf(headers,'餐點正確性'),environment:indexOf(headers,'整體餐廳環境'),service:indexOf(headers,'服務'),speed:indexOf(headers,'服務速度'),food:indexOf(headers,'餐點好吃度')};
     const out=[];
     for(const cells of nonempty(matrix.slice(headerRow+1))){
       const restaurant=clean(cells[ix.restaurant]);if(!restaurant)continue;
-      const store=stores.byName.get(restaurant);if(!store&&!centerScope)continue;const row={period_start:start,period_end:end,restaurant_name:restaurant,store_code:store?.store_code||null,response_count:Number(cells[ix.count])||0,score_1sat:percentage(cells[ix.one]),osat_survey:percentage(cells[ix.survey]),osat_google:percentage(cells[ix.google]),osat_delivery:percentage(cells[ix.delivery]),score_accuracy:percentage(cells[ix.accuracy]),score_environment:percentage(cells[ix.environment]),score_service:percentage(cells[ix.service]),score_speed:percentage(cells[ix.speed]),score_food:percentage(cells[ix.food]),raw_fields:{...Object.fromEntries(headers.map((h,i)=>[h||`欄位${i+1}`,cells[i]??''])),scope:centerScope?'center-franchise':'restaurant',filter_summary:filterText}};
-      row.source_row=matrix.indexOf(cells)+1;out.push(rowRecord('GES',keyParts([start,end,centerScope?'center-franchise':'restaurant',restaurant]),file,row));
+      const store=stores.byName.get(restaurant),row={period_start:start,period_end:end,restaurant_name:restaurant,store_code:store?.store_code||'',response_count:Number(cells[ix.count])||0,score_1sat:percentage(cells[ix.one]),osat_survey:percentage(cells[ix.survey]),osat_google:percentage(cells[ix.google]),osat_delivery:percentage(cells[ix.delivery]),score_accuracy:percentage(cells[ix.accuracy]),score_environment:percentage(cells[ix.environment]),score_service:percentage(cells[ix.service]),score_speed:percentage(cells[ix.speed]),score_food:percentage(cells[ix.food]),raw_fields:Object.fromEntries(headers.map((h,i)=>[h||`欄位${i+1}`,cells[i]??'']))};
+      out.push(rowRecord('GES',keyParts([start,end,restaurant]),file,row));
     }
     if(!out.length)throw new Error('GES 檔沒有餐廳彙總列。');
     return out;
@@ -85,8 +87,6 @@
     else if(flat.some(r=>r.some(x=>clean(x)==='建議種類')&&r.some(x=>clean(x)==='被抱怨型態')&&r.some(x=>clean(x)==='重點')&&r.some(x=>clean(x)==='項目1'))){type='0800';rows=await parse0800(flat,file);}
     else if(flat.some(r=>r.some(x=>clean(x)==='問卷 OSAT')&&r.some(x=>clean(x)==='# 回應數'))){type='GES';rows=parseGes(flat,file,stores);}
     else throw new Error('無法辨識檔案類型；請選 0800、4128 或 GES 格式。');
-    if(rows.some(r=>(r.record_date||r.period_start)<(window.T996Config.feedbackHistoryStart||window.T996Config.activationDate)))throw new Error('新回饋分析自 '+(window.T996Config.feedbackHistoryStart||window.T996Config.activationDate)+' 啟用，未匯入較早資料。');
-    if(type!=='GES'){const ds=flat.map(row=>opsIsoDate(row[0])).filter(Boolean).sort();if(ds.length)for(const row of rows)Object.assign(row.raw_fields,{_coverage_start:ds[0],_coverage_end:ds.at(-1)});}
     const uniq=new Map(rows.map(r=>[r.source_type+'|'+r.source_key,r]));rows=[...uniq.values()];
     const start=rows.map(r=>r.record_date||r.period_start).filter(Boolean).sort()[0],end=rows.map(r=>r.record_date||r.period_end).filter(Boolean).sort().at(-1);
     return {file,type,rows,start,end,unmapped:rows.filter(r=>r.source_type==='4128'&&r.restaurant_name.startsWith('未配對店號')).length};
@@ -110,8 +110,10 @@
         }
       }
       $('opsFeedbackMessage').textContent=`完成匯入 ${done.toLocaleString()} 筆篩選資料；重複鍵值已更新。`;
-      prepared.length=0;root.value='';render();window.t996RefreshFeedback?.();
+      prepared.length=0;root.value='';render();
+      window.t996RefreshFeedback?.();
     }catch(e){$('opsFeedbackMessage').textContent='匯入中止：'+(e.message||'請檢查登入狀態與資料庫 migration')+'；重新上傳同檔可更新已匯入資料。';}
     finally{const currentButton=$('opsFeedbackImport');if(currentButton)currentButton.disabled=!prepared.length;}
   });
 })();
+
