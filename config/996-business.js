@@ -453,7 +453,7 @@
   "weeklySalesNotes": {},
   "closureDays": ["2025-07-07", "2025-11-12", "2026-07-11", "2026-10-23", "2026-10-24"],
   "closureDaysSource": "docs/停班停課紀錄-2025-2026.md（停班停課且當日 TC 明顯偏低者；局部鄉鎮不列）",
-  "storeOpenDates": {},
+  "storeOpenDates": {"246": "2025-11-03", "247": "2025-12-13"},
   "kpiTargets": {"sstg": 0.042, "d7": 0.25, "d25": 0.7, "faShareMax": 0.25, "tplh": 2},
   "forecast": {
     "weeks": 8,
